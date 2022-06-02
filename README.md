@@ -1,2 +1,3 @@
 # bot-arena-control
-Controllercode for FUBAR combat robot arena
+Controller code for FUBAR combat robot arena
+This should work with ESP32 and STM32F103

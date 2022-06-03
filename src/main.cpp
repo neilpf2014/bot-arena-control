@@ -104,6 +104,25 @@ void loop()
       GameOver.update();
       GamePause.update();
       Match_Reset = false;
+      // pause hit
+      if (GamePause.isCycled())
+      {
+        BtnCycle = GamePause.cycleCount();
+        match = paused;
+      }
+      if(End_A.isCycled() && (match == in_progress))
+      {
+
+      }
+      if(End_B.isCycled() && (match == in_progress))
+      {
+
+      }
+      if(GameOver.isCycled() && (match == in_progress)) 
+      {
+        /* code */
+      }
+      
     }
     else
     // match is not running these are active

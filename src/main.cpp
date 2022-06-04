@@ -6,7 +6,7 @@
 ** ready and tap out for 2 teams
 ** Match start / pause / end /reset for ref
 ** Serial out to hacked iCruze display boards
-** 
+** NF 2022/06/04
 
 */
 
@@ -43,15 +43,121 @@ uint64_t BRLmills;
 uint64_t cmils;
 uint64_t period = 50;
 // Match state
-enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, paused, time_up, ko_end, team_a_tap, team_b_tap };
-MatchState match;
-uint8_t Match_Reset;
+enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, ending, unpaused, paused, team_a_tap, team_b_tap, time_up, ko_end };
+MatchState g_match;
+uint8_t g_Match_Reset;
 
-bool GameOn;
-uint32_t BtnCycle;
+bool GameOn;  // do we need this ?
+
+uint64_t gMatchRunTime; //match run time ms
+uint64_t gMatchStartTime; //match start time ms
+uint8_t isTimerRunning;
+
+// button reading and state setting is done here
+void readBtns(MatchState &match, uint8_t &Match_Reset)
+{
+  // note the button.cycleCount() resets the button press counter
+  uint32_t BtnCycle;
+
+  // if match is running these buttons are active
+    if (match == in_progress)
+    {
+      End_A.update();
+      End_B.update();
+      GameOver.update();
+      GamePause.update();
+      Match_Reset = false;
+      // pause hit
+      if (GamePause.isCycled())
+      {
+        BtnCycle = GamePause.cycleCount();
+        match = paused;
+        
+      }
+      // team tap out
+      if ((End_A.isCycled() || End_B.isCycled()) && (match == in_progress))
+      {
+        // Team A has tapped out
+        if(End_A.isCycled())
+          match = team_a_tap;
+        // Team B has tapped out
+        if(End_B.isCycled())
+          match = team_b_tap;
+        BtnCycle = End_A.cycleCount();
+        BtnCycle = End_B.cycleCount();
+      }
+
+      // Ref has ended the match
+      if(GameOver.isCycled() && (match == in_progress)) 
+      {
+        BtnCycle = GameOver.cycleCount();
+        match = ko_end;
+      }
+    }
+    else
+    // match is ended these are active
+    // starting is the match start countdown state
+    if ((match != starting)||(match != paused)||(match != unpaused))
+    {
+      {
+        GameStart.update();
+        Start_A.update();
+        Start_B.update();
+        GameReset.update();
+        // this discards the reads on A, B and main start if not reset
+        if (Match_Reset == false)
+        {
+          BtnCycle = Start_A.cycleCount();
+          BtnCycle = Start_B.cycleCount();
+          BtnCycle = GameStart.cycleCount();
+        }
+        if (GameReset.isCycled())
+        {
+          Match_Reset = true;
+          BtnCycle =GameReset.cycleCount();
+        }
+
+        // check to see if both teams are ready
+        if (Start_A.isCycled() and Start_B.isCycled())
+        {
+          match = all_ready;
+          BtnCycle = Start_A.cycleCount();
+          BtnCycle = Start_B.cycleCount();
+        }
+        else
+        {
+          if (Start_A.isCycled())
+            match = team_a_ready;
+          if (Start_B.isCycled())
+            match = team_b_ready;
+        }
+        // if everyone is ready and start is pressed
+        if (GameStart.isCycled() and (match == all_ready))
+        {
+          BtnCycle = GameStart.cycleCount();
+          BtnCycle = GameReset.cycleCount();
+          match = starting;
+        }
+      }
+    }
+    // match paused
+    else
+    {
+      if(match == paused)
+      {
+        GameStart.update();
+        if(GameStart.isCycled())
+        {
+          match = unpaused;
+          BtnCycle = GameStart.cycleCount();
+        }
+      }
+    }
+
+}
 
 // used to blink the light tower
-bool blink(bool state, u_int8_t ledGPIO)
+void blink(bool &state, uint64_t &lastBlink, u_int8_t ledGPIO)
 {
   uint8_t rState;
 	if (state > 0)
@@ -64,7 +170,16 @@ bool blink(bool state, u_int8_t ledGPIO)
 		digitalWrite(ledGPIO, LOW);
 		rState = 1;
 	}
-	return rState;
+	state = rState;
+}
+
+// update and display match time
+void match_timer(u_int64_t StartTime, u_int64_t &timerValue, u_int8_t &running)
+{
+  if ((running) && (timerValue < MATCH_LEN * 1000))
+    timerValue = millis() - StartTime;
+  else
+    running = false;
 }
 
 void setup() {
@@ -87,87 +202,15 @@ void setup() {
   digitalWrite(HORN,LOW);
   cmils = millis();
   BRLmills = 0;
-  Match_Reset = false;
+  g_Match_Reset = false;
+  isTimerRunning = false;
+  gMatchRunTime = 0;
+  gMatchStartTime = 0;
 }
 
 void loop() 
 {
-  // Button reading is here
-  if ((cmils-BRLmills) > MAIN_LOOP_DELAY)
-  {
-  // button reading and state setting is done here
-  // if match is running these buttons are active
-    if (match == in_progress)
-    {
-      End_A.update();
-      End_B.update();
-      GameOver.update();
-      GamePause.update();
-      Match_Reset = false;
-      // pause hit
-      if (GamePause.isCycled())
-      {
-        BtnCycle = GamePause.cycleCount();
-        match = paused;
-      }
-      if(End_A.isCycled() && (match == in_progress))
-      {
-
-      }
-      if(End_B.isCycled() && (match == in_progress))
-      {
-
-      }
-      if(GameOver.isCycled() && (match == in_progress)) 
-      {
-        /* code */
-      }
-      
-    }
-    else
-    // match is not running these are active
-    if (match != starting)
-    {
-      {
-        GameStart.update();
-        Start_A.update();
-        Start_B.update();
-        GameReset.update();
-        // this discards the reads on A, B and main start if not reset
-        if (Match_Reset == false)
-        {
-          BtnCycle = Start_A.cycleCount();
-          BtnCycle = Start_B.cycleCount();
-          BtnCycle = GameStart.cycleCount();
-        }
-        if (GameReset.isCycled())
-        {
-          Match_Reset = true;
-          BtnCycle =GameReset.cycleCount();
-        }
-        if (Start_A.isCycled() and Start_B.isCycled())
-        {
-          match = all_ready;
-          BtnCycle = Start_A.cycleCount();
-          BtnCycle = Start_B.cycleCount();
-        }
-        else
-        {
-          if (Start_A.isCycled())
-            match = team_a_ready;
-          if (Start_B.isCycled())
-            match = team_b_ready;
-        }
-        if (GameStart.isCycled() and (match == all_ready))
-        {
-          BtnCycle = GameStart.cycleCount();
-          BtnCycle = GameReset.cycleCount();
-          match = starting;
-        }
-      }
-    }
-  
- // Button check logic
+  // Button check logic
  /* no match states:
       Reset and ready for start ( solid yellow )
         team a ready
@@ -184,28 +227,91 @@ void loop()
       10 sec count down (blinking green)
     Horn will sound at match end, time up or team tapout
  */
-  }
-  // handle lights / horn here outside of button loop
-
-  // loop to deal with match timer
-
-
-// This is just test code
-if ((cmils-pmils) > period)
+  // Button reading is here
+  if ((cmils-BRLmills) > MAIN_LOOP_DELAY)
   {
-     // This is just test code
-     if(Start_A.isCycled())
-     {
-       Serial.print("Button 1 pressed ");
-       Serial.print(Start_A.cycleCount());
-       Serial.println(" times!");
-     }    
-      if(Start_B.isCycled())
-     {
-       Serial.print("Button 2 pressed ");
-       Serial.print(Start_B.cycleCount());
-       Serial.println(" times!");
-     }
-     pmils = cmils;
+ 
+    readBtns(g_match, g_Match_Reset);
+  }
+  // handle lights
+  if ((cmils-BRLmills + 2) > MAIN_LOOP_DELAY)
+  {
+    // all lights off
+    if((g_Match_Reset) && (g_match != starting))
+    {
+      digitalWrite(G_LIGHT,LOW);
+      digitalWrite(Y_LIGHT,LOW);
+      digitalWrite(R_LIGHT,LOW);
+    }
+    // match in progress
+    if (g_match == in_progress)
+    {
+      digitalWrite(G_LIGHT,HIGH);
+      digitalWrite(Y_LIGHT,LOW);
+      digitalWrite(R_LIGHT,LOW);
+    }
+    // match is stopped
+    // if ((g_match != in_progress) || (g_match != starting) || (g_match != paused) || (g_match != unpaused))
+    // not sure if enum can be used this way
+    if ((g_match < 3) && (g_match > 6))
+    {
+      digitalWrite(G_LIGHT,LOW);
+      //digitalWrite(Y_LIGHT,LOW);
+      digitalWrite(R_LIGHT,HIGH);
+    }
+
+    // match is starting
+    // blink yellow for 3 sec, red out, green out
+
+    // match is paused
+    // red is lit yellow is blinking
+
+    // match is ending (within 15 sec of end)
+    // blink green
+
+    // to do when everything working
+    // Team A tap blink A tower red
+    // Team B tap blink B tower red
+    // for now just blink both towers red
+
+  }
+  // handle horn
+  if ((cmils-BRLmills + 3) > MAIN_LOOP_DELAY)
+  {
+      // short horn on start or pause
+
+      // long horn on match end
+  }
+
+  // update match timer
+  if ((cmils-BRLmills + 4) > MAIN_LOOP_DELAY)
+  {
+    //start timer
+    if((g_match == in_progress)&&(isTimerRunning == false))
+    {
+      gMatchStartTime = millis();
+      isTimerRunning = true;
+    }
+    //restart after pause
+
+    //stop timer
+    
+  }
+
+  // update char display
+  // will send info out via serial
+  if ((cmils-BRLmills) > MAIN_LOOP_DELAY)
+  {
+    // using the 2 x 20 line iCruze display
+    // refresh display every 200 ms 
+    // display time remaining in min : sec ion first line
+    // status display on second
+    // --starting count down
+    // --ending countdown
+    // --match paused
+    // --team A tapped
+    // --team B tapped
+    // --KO end
+    // --Time Up end
   }
 }

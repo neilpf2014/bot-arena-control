@@ -30,6 +30,13 @@
     10 sec count down (blinking green)
   Horn will sound at match end, time up or team tapout
 */
+// inline echo for debug
+#define DEBUG_ON 1
+#define DEBUG_OFF 0
+byte debugMode = DEBUG_OFF;
+
+#define DBG(...) debugMode == DEBUG_ON ? Serial.println(__VA_ARGS__) : NULL
+
 
 // button GPIO's ESP32 / Change for STM32
 #define TEAM_A_START 23
@@ -75,7 +82,7 @@ uint64_t Display_timer;
 
 // Match state
 enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, ending, unpaused, paused, team_a_tap, team_b_tap, time_up, ko_end };
-MatchState g_match;
+enum MatchState g_match;
 uint8_t g_Match_Reset;
 
 uint64_t gMatchRunTime; //match run time ms
@@ -108,7 +115,6 @@ void readBtns(MatchState &match, uint8_t &Match_Reset)
       {
         BtnCycle = GamePause.cycleCount();
         match = paused;
-        
       }
       // team tap out
       if ((End_A.isCycled() || End_B.isCycled()) && (match == in_progress))
@@ -267,6 +273,50 @@ void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
   // for now just blink both towers red
 }
 
+// light debug function
+void LightDebugPrint(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
+{
+  switch (match)
+  {
+  case MatchState::all_ready:
+    Serial.println("All ready");
+    break;
+  case MatchState::team_a_ready:
+    Serial.println("team_a_ready");
+    break;
+  case MatchState::team_b_ready:
+    Serial.println("team_b_ready");
+    break;
+  case MatchState::starting:
+    Serial.println("starting");
+    break;
+  case MatchState::in_progress:
+    Serial.println("in_progress");
+    break;
+  case MatchState::ending:
+    Serial.println("ending");
+    break;
+  case MatchState::unpaused:
+    Serial.println("unpaused");
+    break;
+  case MatchState::paused:
+    Serial.println("paused");
+    break;
+  case MatchState::team_a_tap:
+    Serial.println("team_a_tap");
+    break;
+  case MatchState::team_b_tap:
+    Serial.println("team_b_tap");
+    break;
+  case MatchState::time_up:
+    Serial.println("time_up");
+  case MatchState::ko_end:
+    Serial.println("ko_end");
+  default:
+    break;
+  }
+}
+
 // used to sound horn (yet another timer)
 void soundHorn(u_int8_t &hornBlast, uint64_t &hornTime, u_int32_t tootLen, u_int8_t GPIO)
 {
@@ -319,6 +369,7 @@ void setup() {
   gMatchRunTime = 0;
   gMatchStartTime = 0;
   gBLtimer = millis();
+  g_match = MatchState::time_up;
 }
 
 void loop() 
@@ -334,15 +385,26 @@ void loop()
     Btn_timer = millis();
   }
   // handle lights
+  #ifdef DEBUG
+  if ((millis()-light_timer) > MAIN_LOOP_DELAY + 200)
+  {
+    LightDebugPrint(g_match, g_Match_Reset, gSDtimer);
+    light_timer = millis();
+  }
+  #else
   if ((millis()-light_timer) > MAIN_LOOP_DELAY + 1)
   {
     setLights(g_match, g_Match_Reset, gSDtimer);
     light_timer = millis();
   }
+  #endif
   // handle horn
+  #ifdef DEBUG
+  #else
   if ((millis()- Horn_timer) > MAIN_LOOP_DELAY * 2 )
   {
       // short horn on start or pause
+      /*
       if(g_match ==starting)
       {
         while (gHornBlast < 6)
@@ -364,8 +426,10 @@ void loop()
       else
         if(g_match!=starting)
           gHornBlast = 0;
+      */
       Horn_timer = millis();
   }
+  #endif
 
   // update match timer
   if ((millis() + Timer_timer) > MAIN_LOOP_DELAY)

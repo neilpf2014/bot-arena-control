@@ -79,6 +79,8 @@ uint64_t light_timer;
 uint64_t Horn_timer;
 uint64_t Timer_timer;
 uint64_t Display_timer;
+uint64_t Dis_min;
+uint64_t Dis_sec;
 
 // Match state
 enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, ending, unpaused, paused, team_a_tap, team_b_tap, time_up, ko_end };
@@ -472,19 +474,28 @@ void loop()
     // refresh display every 200 ms 
     // display time remaining in min : sec on first line
     // status display on second
+    Dis_min = MatchSecRemain / 60;
+    Dis_sec = MatchSecRemain % 60;
     if(g_match == in_progress)
     {
-      Serial1.println((MatchSecRemain/60) + ':' + (MatchSecRemain % 60) + " Remaining");
+      Serial1.print(Dis_min);
+      Serial1.print(":");
+      Serial1.printf("%02d",Dis_sec);
+      Serial1.println(" Remaining");
       Serial1.println("Match in Progress");
     }
     if(g_match == paused)
     {
-      Serial1.println((MatchSecRemain/60) + ':' + (MatchSecRemain % 60) + " Remaining");
+      Serial1.print(Dis_min);
+      Serial1.print(":");
+      Serial1.printf("%02d",Dis_sec);
+      Serial1.println(" Remaining");
       Serial1.println("--Paused --");
     }
     if(g_match == starting)
     {
-      Serial1.println("Starting in: " + (gSDtimer/1000));
+      Serial1.print("Starting in: ");
+      Serial1.printf("%02d",(gSDtimer/1000));
       Serial1.println("Teams Ready-Starting");
     }
     if(g_match == time_up)
@@ -494,17 +505,26 @@ void loop()
     }
     if(g_match == team_a_tap)
     {
-      Serial1.println((MatchSecRemain/60) + ':' + (MatchSecRemain % 60) + " -MATCH OVER-");
+      Serial1.print(Dis_min);
+      Serial1.print(":");
+      Serial1.printf("%02d",Dis_sec);
+      Serial1.println(" -MATCH OVER-");
       Serial1.println("--TEAM A TAPOUT--");
     }
     if(g_match == team_b_tap)
     {
-      Serial1.println((MatchSecRemain/60) + ':' + (MatchSecRemain % 60) + " -MATCH OVER-");
+      Serial1.print(Dis_min);
+      Serial1.print(":");
+      Serial1.printf("%02d",Dis_sec);
+      Serial1.println(" -MATCH OVER-");
       Serial1.println("--TEAM B TAPOUT--");
     }
     if(g_match == ko_end)
     {
-      Serial1.println((MatchSecRemain/60) + ':' + (MatchSecRemain % 60) + " -MATCH OVER-");
+      Serial1.print(Dis_min);
+      Serial1.print(":");
+      Serial1.printf("%02d",Dis_sec);
+      Serial1.println(" -MATCH OVER-");
       Serial1.println("-- BY KNOCKOUT --");
     }
     if(g_match == all_ready)

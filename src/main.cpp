@@ -33,10 +33,10 @@
 // inline echo for debug
 #define DEBUG_ON 1
 #define DEBUG_OFF 0
-byte debugMode = DEBUG_OFF;
+byte debugMode = DEBUG_ON;
 
 #define DBG(...) debugMode == DEBUG_ON ? Serial.println(__VA_ARGS__) : NULL
-
+#define DEBUG
 
 // button GPIO's ESP32 / Change for STM32
 #define TEAM_A_START 23
@@ -85,7 +85,7 @@ uint64_t Dis_sec;
 // Match state
 enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, ending, unpaused, paused, team_a_tap, team_b_tap, time_up, ko_end };
 enum MatchState g_match;
-uint8_t g_Match_Reset;
+bool g_Match_Reset;
 
 uint64_t gMatchRunTime; //match run time ms
 uint64_t gMatchStartTime; //match start time ms
@@ -99,55 +99,57 @@ uint8_t gHornState; // for horn
 uint8_t gHornBlast;
 
 // button reading and state setting is done here
-void readBtns(MatchState &match, uint8_t &Match_Reset)
+void readBtns(MatchState &match, bool &Match_Reset)
 {
   // note the button.cycleCount() resets the button press counter
   uint32_t BtnCycle;
 
   // if match is running these buttons are active
-    if (match == in_progress)
+    if (match == MatchState::in_progress)
     {
       End_A.update();
       End_B.update();
       GameOver.update();
       GamePause.update();
       Match_Reset = false;
+      DBG("test IP");
       // pause hit
       if (GamePause.isCycled())
       {
         BtnCycle = GamePause.cycleCount();
-        match = paused;
+        match = MatchState::paused;
       }
       // team tap out
-      if ((End_A.isCycled() || End_B.isCycled()) && (match == in_progress))
+      if ((End_A.isCycled() || End_B.isCycled()) && (match == MatchState::in_progress))
       {
         // Team A has tapped out
         if(End_A.isCycled())
-          match = team_a_tap;
+          match = MatchState::team_a_tap;
         // Team B has tapped out
         if(End_B.isCycled())
-          match = team_b_tap;
+          match = MatchState::team_b_tap;
         BtnCycle = End_A.cycleCount();
         BtnCycle = End_B.cycleCount();
       }
 
       // Ref has ended the match
-      if(GameOver.isCycled() && (match == in_progress)) 
+      if(GameOver.isCycled() && (match == MatchState::in_progress)) 
       {
         BtnCycle = GameOver.cycleCount();
-        match = ko_end;
+        match = MatchState::ko_end;
       }
     }
     else
     // match is ended these are active
     // starting is the match start countdown state
-    if ((match != starting)||(match != paused)||(match != unpaused))
+    if ((match != MatchState::starting)||(match != MatchState::paused)||(match != MatchState::unpaused))
     {
       {
         GameStart.update();
         Start_A.update();
         Start_B.update();
         GameReset.update();
+        //DBG("test Start");
         // this discards the reads on A, B and main start if not reset
         if (Match_Reset == false)
         {
@@ -164,30 +166,34 @@ void readBtns(MatchState &match, uint8_t &Match_Reset)
         // check to see if both teams are ready
         if (Start_A.isCycled() and Start_B.isCycled())
         {
-          match = all_ready;
+          match = MatchState::all_ready;
           BtnCycle = Start_A.cycleCount();
           BtnCycle = Start_B.cycleCount();
         }
         else
         {
           if (Start_A.isCycled())
-            match = team_a_ready;
+          {
+            match = MatchState::team_a_ready;
+          }
           if (Start_B.isCycled())
-            match = team_b_ready;
+          {
+            match = MatchState::team_b_ready;
+          }
         }
         // if everyone is ready and start is pressed
-        if (GameStart.isCycled() and (match == all_ready))
+        if (GameStart.isCycled() and (match == MatchState::all_ready))
         {
           BtnCycle = GameStart.cycleCount();
           BtnCycle = GameReset.cycleCount();
-          match = starting;
+          match = MatchState::starting;
         }
       }
     }
     // match paused
     else
     {
-      if(match == paused)
+      if(match == MatchState::paused)
       {
         GameStart.update();
         if(GameStart.isCycled())
@@ -224,7 +230,7 @@ void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
 {
   
 // all lights off
-  if((Match_Reset) && (match != starting))
+  if((Match_Reset) && (match != MatchState::starting))
   {
     digitalWrite(G_LIGHT,LOW);
     digitalWrite(Y_LIGHT,LOW);
@@ -248,23 +254,23 @@ void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
   }
   // match is starting
   // blink yellow for 3 sec, red out, green out
-  if(match == starting)
+  if(match == MatchState::starting)
   {
     if((millis()-SDtimer) < STARTUP_DELAY)
       blink(gBLstate, gBLtimer, Y_LIGHT);
     else
-      match=in_progress;
+      match=MatchState::in_progress;
   }
   // match is paused
   // red is lit yellow is blinking
-  if(match == paused)
+  if(match == MatchState::paused)
   {
     blink(gBLstate, gBLtimer, Y_LIGHT);
     digitalWrite(R_LIGHT,HIGH);
   }
   // match is ending (within 15 sec of end)
   // blink green
-  if(match == ending)
+  if(match == MatchState::ending)
   {
     blink(gBLstate, gBLtimer, G_LIGHT);
   }
@@ -310,12 +316,20 @@ void LightDebugPrint(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer
   case MatchState::team_b_tap:
     Serial.println("team_b_tap");
     break;
-  case MatchState::time_up:
+  /*case MatchState::time_up:
     Serial.println("time_up");
+    break;
   case MatchState::ko_end:
-    Serial.println("ko_end");
+    Serial.println("ko_end");*/
   default:
     break;
+  }
+  if(match == MatchState::starting)
+  {
+    if((millis()-SDtimer) < STARTUP_DELAY)
+      blink(gBLstate, gBLtimer, Y_LIGHT);
+    else
+      match=MatchState::in_progress;
   }
 }
 
@@ -371,6 +385,7 @@ void setup() {
   gMatchRunTime = 0;
   gMatchStartTime = 0;
   gBLtimer = millis();
+  Btn_timer = millis();
   g_match = MatchState::time_up;
 }
 
@@ -381,8 +396,9 @@ void loop()
   if ((millis()-Btn_timer) > MAIN_LOOP_DELAY)
   {
     readBtns(g_match, g_Match_Reset);
+    DEBUG("test prime");
     // set startup delay - match will be inprogress after this is done
-    if (g_match == starting)
+    if (g_match == MatchState::starting)
       gSDtimer = millis();
     Btn_timer = millis();
   }
@@ -407,7 +423,7 @@ void loop()
   {
       // short horn on start or pause
       /*
-      if(g_match ==starting)
+      if(g_match == MatchState::starting)
       {
         while (gHornBlast < 6)
         {
@@ -426,7 +442,7 @@ void loop()
         }
       }
       else
-        if(g_match!=starting)
+        if(g_match!=MatchState::starting)
           gHornBlast = 0;
       */
       Horn_timer = millis();
@@ -437,32 +453,32 @@ void loop()
   if ((millis() + Timer_timer) > MAIN_LOOP_DELAY)
   {
     //start timer
-    if((g_match == in_progress)&&(isTimerRunning == false))
+    if((g_match == MatchState::in_progress)&&(isTimerRunning == false))
     {
       gMatchStartTime = millis();
       isTimerRunning = true;
     }
     //restart after pause
-    if((g_match == unpaused)&&(isTimerRunning == false))
+    if((g_match == MatchState::unpaused)&&(isTimerRunning == false))
     {
       isTimerRunning = true;
-      g_match = in_progress;
+      g_match = MatchState::in_progress;
     }
     //stop timer
-    if(g_match != in_progress)
+    if(g_match != MatchState::in_progress)
       isTimerRunning = false;
 
     //update timer
-    if(((g_match == in_progress)||(g_match == ending))&&(isTimerRunning == true))
+    if(((g_match == MatchState::in_progress)||(g_match == MatchState::ending))&&(isTimerRunning == true))
     {
       match_timer(gMatchStartTime, gMatchRunTime, isTimerRunning);
       if(isTimerRunning == false)
-        g_match = time_up;
+        g_match = MatchState::time_up;
     }
     // check for match ending
     MatchSecRemain = MATCH_LEN - ((gMatchRunTime - gMatchStartTime)/1000);
     if (MatchSecRemain < MATCH_END_WARN)
-      g_match  = ending;
+      g_match  = MatchState::ending;
     Timer_timer = millis();
   }
 
@@ -476,7 +492,7 @@ void loop()
     // status display on second
     Dis_min = MatchSecRemain / 60;
     Dis_sec = MatchSecRemain % 60;
-    if(g_match == in_progress)
+    if(g_match == MatchState::in_progress)
     {
       Serial1.print(Dis_min);
       Serial1.print(":");
@@ -484,7 +500,7 @@ void loop()
       Serial1.println(" Remaining");
       Serial1.println("Match in Progress");
     }
-    if(g_match == paused)
+    if(g_match == MatchState::paused)
     {
       Serial1.print(Dis_min);
       Serial1.print(":");
@@ -492,18 +508,18 @@ void loop()
       Serial1.println(" Remaining");
       Serial1.println("--Paused --");
     }
-    if(g_match == starting)
+    if(g_match == MatchState::starting)
     {
       Serial1.print("Starting in: ");
       Serial1.printf("%02d",(gSDtimer/1000));
       Serial1.println("Teams Ready-Starting");
     }
-    if(g_match == time_up)
+    if(g_match == MatchState::time_up)
     {
       Serial1.println("--- Time's Up ---");
       Serial1.println("-- MATCH OVER ---");
     }
-    if(g_match == team_a_tap)
+    if(g_match == MatchState::team_a_tap)
     {
       Serial1.print(Dis_min);
       Serial1.print(":");
@@ -511,7 +527,7 @@ void loop()
       Serial1.println(" -MATCH OVER-");
       Serial1.println("--TEAM A TAPOUT--");
     }
-    if(g_match == team_b_tap)
+    if(g_match == MatchState::team_b_tap)
     {
       Serial1.print(Dis_min);
       Serial1.print(":");
@@ -519,7 +535,7 @@ void loop()
       Serial1.println(" -MATCH OVER-");
       Serial1.println("--TEAM B TAPOUT--");
     }
-    if(g_match == ko_end)
+    if(g_match == MatchState::ko_end)
     {
       Serial1.print(Dis_min);
       Serial1.print(":");
@@ -527,12 +543,12 @@ void loop()
       Serial1.println(" -MATCH OVER-");
       Serial1.println("-- BY KNOCKOUT --");
     }
-    if(g_match == all_ready)
+    if(g_match == MatchState::all_ready)
     {
       Serial1.println("-- 3 min clock ---");
       Serial1.println("--- ALL READY ---");
     }
-    if((g_match != all_ready)&&(g_Match_Reset == true))
+    if((g_match != MatchState::all_ready)&&(g_Match_Reset == true))
     {
       Serial1.println("-- WAITING FOR ---");
       Serial1.println("----- READY -----");

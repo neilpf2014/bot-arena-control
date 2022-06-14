@@ -102,7 +102,7 @@ uint8_t gHornBlast;
 void readBtns(MatchState &match, bool &Match_Reset)
 {
   // note the button.cycleCount() resets the button press counter
-  uint32_t BtnCycle;
+  uint8_t BtnCycle;
 
   // if match is running these buttons are active
     if (match == MatchState::in_progress)
@@ -260,6 +260,7 @@ void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
       blink(gBLstate, gBLtimer, Y_LIGHT);
     else
       match=MatchState::in_progress;
+    SDtimer = millis();
   }
   // match is paused
   // red is lit yellow is blinking
@@ -330,6 +331,7 @@ void LightDebugPrint(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer
       blink(gBLstate, gBLtimer, Y_LIGHT);
     else
       match=MatchState::in_progress;
+    SDtimer = millis();
   }
 }
 
@@ -362,8 +364,7 @@ void match_timer(u_int64_t StartTime, u_int64_t &timerValue, u_int8_t &running)
 
 void setup() {
   Serial.begin(115200);
-  Serial1.setPins(D_SER_RX, D_SER_TX);
-  Serial1.begin(9600);
+  Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
   pinMode(R_LIGHT,OUTPUT);
   pinMode (Y_LIGHT,OUTPUT);
   pinMode (G_LIGHT, OUTPUT);
@@ -387,6 +388,8 @@ void setup() {
   gBLtimer = millis();
   Btn_timer = millis();
   g_match = MatchState::time_up;
+  Serial1.println("---Display Test----");
+  Serial1.println("---Line 2----");
 }
 
 void loop() 
@@ -512,7 +515,8 @@ void loop()
     {
       Serial1.print("Starting in: ");
       Serial1.printf("%02d",(gSDtimer/1000));
-      Serial1.println("Teams Ready-Starting");
+      Serial1.println();
+      Serial1.println("ALL READY-Starting");
     }
     if(g_match == MatchState::time_up)
     {
@@ -548,7 +552,7 @@ void loop()
       Serial1.println("-- 3 min clock ---");
       Serial1.println("--- ALL READY ---");
     }
-    if((g_match != MatchState::all_ready)&&(g_Match_Reset == true))
+    if((g_match != MatchState::all_ready)&&(g_Match_Reset == true)&&(g_match != MatchState::starting))
     {
       Serial1.println("-- WAITING FOR ---");
       Serial1.println("----- READY -----");

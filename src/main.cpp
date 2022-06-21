@@ -90,6 +90,7 @@ bool g_Match_Reset;
 uint64_t gMatchRunTime; //match run time ms
 uint64_t gMatchStartTime; //match start time ms
 uint64_t MatchSecRemain; // sec remaining
+int64_t CountDownMSec; // count down
 uint8_t isTimerRunning;
 uint64_t gSDtimer; // used for start delay
 uint64_t gBLtimer; // for light blinking
@@ -385,6 +386,8 @@ void setup() {
   isTimerRunning = false;
   gMatchRunTime = 0;
   gMatchStartTime = 0;
+  gSDtimer = 0;
+  CountDownMSec = 0;
   gBLtimer = millis();
   Btn_timer = millis();
   g_match = MatchState::time_up;
@@ -401,8 +404,19 @@ void loop()
     readBtns(g_match, g_Match_Reset);
     DEBUG("test prime");
     // set startup delay - match will be inprogress after this is done
-    if (g_match == MatchState::starting)
+    if ((g_match == MatchState::starting)&&(gSDtimer == 0))
       gSDtimer = millis();
+    else if (g_match == MatchState::starting)
+    {
+      CountDownMSec = STARTUP_DELAY -(millis() - gSDtimer);
+      if (CountDownMSec < 5)
+      {
+        // start match reset count down timer
+        g_match = MatchState::in_progress;
+        CountDownMSec = 0;
+        gSDtimer = 0;
+      }
+    }
     Btn_timer = millis();
   }
   // handle lights

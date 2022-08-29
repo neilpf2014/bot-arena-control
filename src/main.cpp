@@ -91,7 +91,7 @@ uint64_t gMatchRunTime; //match run time ms
 uint64_t gMatchStartTime; //match start time ms
 uint64_t MatchSecRemain; // sec remaining
 int64_t CountDownMSec; // count down
-uint8_t isTimerRunning;
+bool isTimerRunning;
 uint64_t gSDtimer; // used for start delay
 uint64_t gBLtimer; // for light blinking
 uint8_t gBLstate; // for light blinking
@@ -106,14 +106,16 @@ void readBtns(MatchState &match, bool &Match_Reset)
   uint8_t BtnCycle;
 
   // if match is running these buttons are active
-    if (match == MatchState::in_progress)
+    if ((match == MatchState::in_progress)||(match == MatchState::ending))
     {
       End_A.update();
       End_B.update();
       GameOver.update();
       GamePause.update();
+      BtnCycle =GameReset.cycleCount();
+      //BtnCycle =GameReset.cycleCount();
       Match_Reset = false;
-      DBG("test IP");
+      // DBG("test IP");
       // pause hit
       if (GamePause.isCycled())
       {
@@ -141,70 +143,71 @@ void readBtns(MatchState &match, bool &Match_Reset)
       }
     }
     else
-    // match is ended these are active
-    // starting is the match start countdown state
-    if ((match != MatchState::starting)||(match != MatchState::paused)||(match != MatchState::unpaused))
     {
+      // match is ended these are active
+      // starting is the match start countdown state
+      if ((match != MatchState::starting)&&(match != MatchState::paused)&&(match != MatchState::unpaused))
       {
-        GameStart.update();
-        Start_A.update();
-        Start_B.update();
-        GameReset.update();
-        //DBG("test Start");
-        // this discards the reads on A, B and main start if not reset
-        if (Match_Reset == false)
         {
-          BtnCycle = Start_A.cycleCount();
-          BtnCycle = Start_B.cycleCount();
-          BtnCycle = GameStart.cycleCount();
-        }
-        if (GameReset.isCycled())
-        {
-          Match_Reset = true;
-          BtnCycle =GameReset.cycleCount();
-        }
+          GameStart.update();
+          Start_A.update();
+          Start_B.update();
+          GameReset.update();
+          // this discards the reads on A, B and main start if not reset
+          if (Match_Reset == false)
+          {
+            BtnCycle = Start_A.cycleCount();
+            BtnCycle = Start_B.cycleCount();
+            BtnCycle = GameStart.cycleCount();
+          }
+          if (GameReset.isCycled())
+          {
+            Match_Reset = true;
+            BtnCycle =GameReset.cycleCount();
+          }
 
-        // check to see if both teams are ready
-        if (Start_A.isCycled() and Start_B.isCycled())
-        {
-          match = MatchState::all_ready;
-          BtnCycle = Start_A.cycleCount();
-          BtnCycle = Start_B.cycleCount();
-        }
-        else
-        {
-          if (Start_A.isCycled())
+          // check to see if both teams are ready
+          if (Start_A.isCycled() and Start_B.isCycled())
           {
-            match = MatchState::team_a_ready;
+            match = MatchState::all_ready;
+            BtnCycle = Start_A.cycleCount();
+            BtnCycle = Start_B.cycleCount();
           }
-          if (Start_B.isCycled())
+          else
           {
-            match = MatchState::team_b_ready;
+            if (Start_A.isCycled())
+            {
+              match = MatchState::team_a_ready;
+            }
+            if (Start_B.isCycled())
+            {
+              match = MatchState::team_b_ready;
+            }
           }
-        }
-        // if everyone is ready and start is pressed
-        if (GameStart.isCycled() and (match == MatchState::all_ready))
-        {
-          BtnCycle = GameStart.cycleCount();
-          BtnCycle = GameReset.cycleCount();
-          match = MatchState::starting;
+          // if everyone is ready and start is pressed
+          if (GameStart.isCycled() and (match == MatchState::all_ready))
+          {
+            BtnCycle = GameStart.cycleCount();
+            BtnCycle = GameReset.cycleCount();
+            //match = MatchState::starting;
+            match = MatchState::in_progress;
+          }
         }
       }
-    }
     // match paused
-    else
-    {
-      if(match == MatchState::paused)
+      else
       {
-        GameStart.update();
-        if(GameStart.isCycled())
+        if(match == MatchState::paused)
         {
-          match = unpaused;
-          BtnCycle = GameStart.cycleCount();
+          GameStart.update();
+          if(GameStart.isCycled())
+          {
+            match = MatchState::unpaused;
+            BtnCycle = GameStart.cycleCount();
+          }
         }
       }
     }
-
 }
 
 // used to blink the light tower
@@ -284,7 +287,7 @@ void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
 }
 
 // light debug function
-void LightDebugPrint(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
+void LightDebugPrint(MatchState match, u_int8_t Match_Reset, u_int64_t SDtimer)
 {
   switch (match)
   {
@@ -300,9 +303,13 @@ void LightDebugPrint(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer
   case MatchState::starting:
     Serial.println("starting");
     break;
-  case MatchState::in_progress:
-    Serial.println("in_progress");
+  /*case MatchState::in_progress:
+  {
+    Serial.print("in_progress time ");
+    Serial.println(SDtimer);
     break;
+  }
+  */
   case MatchState::ending:
     Serial.println("ending");
     break;
@@ -326,7 +333,7 @@ void LightDebugPrint(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer
   default:
     break;
   }
-  if(match == MatchState::starting)
+  /*if(match == MatchState::starting)
   {
     if((millis()-SDtimer) < STARTUP_DELAY)
       blink(gBLstate, gBLtimer, Y_LIGHT);
@@ -334,6 +341,7 @@ void LightDebugPrint(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer
       match=MatchState::in_progress;
     SDtimer = millis();
   }
+  */
 }
 
 // used to sound horn (yet another timer)
@@ -354,26 +362,68 @@ void soundHorn(u_int8_t &hornBlast, uint64_t &hornTime, u_int32_t tootLen, u_int
     hornBlast++;
   }
 }
-// update and display match time
-void match_timer(u_int64_t StartTime, u_int64_t &timerValue, u_int8_t &running)
+
+//  match time control
+void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValue, bool &running, bool reset)
 {
-  if ((running) && (timerValue < MATCH_LEN * 1000))
-    timerValue = millis() - StartTime;
-  else
-    running = false;
+  if((l_match == MatchState::in_progress)&&(running == false))
+  {
+      // reset timer at beginning of match
+      StartTime = millis();
+      timerValue = 0;
+      running = true;
+  }
+  //restart after pause
+  if((l_match == MatchState::unpaused)&&(running == false))
+  {
+      running = true;
+      // need to adjust start time to account for pause
+      StartTime = millis() - timerValue;
+      l_match = MatchState::in_progress;
+  }
+
+  //stop timer
+  if((l_match != MatchState::in_progress) && (l_match != MatchState::ending))
+  {
+      // done for debug only
+      if(running)
+      {
+        running = false;
+      }
+  }
+  //update timer
+  if((l_match == MatchState::in_progress)||(l_match == MatchState::ending))
+  { 
+    if ((running) && (timerValue < (MATCH_LEN * 1000)))
+    {
+      timerValue = millis() - StartTime;
+    }
+    else
+    {
+      running = false;
+    }
+    if(running == false)
+    {
+      l_match = MatchState::time_up;
+    }
+  }
 }
+
 
 void setup() {
   Serial.begin(115200);
+  // give the iCruze attiny time to boot
+  delay(1000);
   Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
   pinMode(R_LIGHT,OUTPUT);
   pinMode (Y_LIGHT,OUTPUT);
   pinMode (G_LIGHT, OUTPUT);
+  delay(100);
   // check lights
   digitalWrite(G_LIGHT,HIGH);
   digitalWrite(Y_LIGHT,HIGH);
   digitalWrite(R_LIGHT,HIGH);
-  Serial.println("test");
+  Serial.println("program starting");
   delay(1000);
   digitalWrite(G_LIGHT,LOW);
   digitalWrite(Y_LIGHT,LOW);
@@ -391,6 +441,7 @@ void setup() {
   gBLtimer = millis();
   Btn_timer = millis();
   g_match = MatchState::time_up;
+  delay(100);
   Serial1.println("---Display Test----");
   Serial1.println("---Line 2----");
 }
@@ -402,8 +453,9 @@ void loop()
   if ((millis()-Btn_timer) > MAIN_LOOP_DELAY)
   {
     readBtns(g_match, g_Match_Reset);
-    DEBUG("test prime");
     // set startup delay - match will be inprogress after this is done
+    
+    /*
     if ((g_match == MatchState::starting)&&(gSDtimer == 0))
       gSDtimer = millis();
     else if (g_match == MatchState::starting)
@@ -417,13 +469,14 @@ void loop()
         gSDtimer = 0;
       }
     }
+    */
     Btn_timer = millis();
   }
   // handle lights
   #ifdef DEBUG
   if ((millis()-light_timer) > MAIN_LOOP_DELAY + 200)
   {
-    LightDebugPrint(g_match, g_Match_Reset, gSDtimer);
+    LightDebugPrint(g_match, g_Match_Reset, gMatchRunTime);
     light_timer = millis();
   }
   #else
@@ -469,33 +522,9 @@ void loop()
   // update match timer
   if ((millis() + Timer_timer) > MAIN_LOOP_DELAY)
   {
-    //start timer
-    if((g_match == MatchState::in_progress)&&(isTimerRunning == false))
-    {
-      gMatchStartTime = millis();
-      isTimerRunning = true;
-    }
-    //restart after pause
-    if((g_match == MatchState::unpaused)&&(isTimerRunning == false))
-    {
-      isTimerRunning = true;
-      g_match = MatchState::in_progress;
-    }
-    //stop timer
-    if(g_match != MatchState::in_progress)
-      isTimerRunning = false;
-
-    //update timer
-    if(((g_match == MatchState::in_progress)||(g_match == MatchState::ending))&&(isTimerRunning == true))
-    {
-      match_timer(gMatchStartTime, gMatchRunTime, isTimerRunning);
-      if(isTimerRunning == false)
-        g_match = MatchState::time_up;
-    }
-    // check for match ending
-    MatchSecRemain = MATCH_LEN - ((gMatchRunTime - gMatchStartTime)/1000);
-    if (MatchSecRemain < MATCH_END_WARN)
-      g_match  = MatchState::ending;
+    match_timer(g_match,gMatchStartTime,gMatchRunTime,isTimerRunning,g_Match_Reset);
+    // count down timer display
+    MatchSecRemain = MATCH_LEN - (gMatchRunTime / 1000);
     Timer_timer = millis();
   }
 
@@ -528,7 +557,7 @@ void loop()
     if(g_match == MatchState::starting)
     {
       Serial1.print("Starting in: ");
-      Serial1.printf("%02d",(gSDtimer/1000));
+      Serial1.printf("%02d",(CountDownMSec/1000));
       Serial1.println();
       Serial1.println("ALL READY-Starting");
     }

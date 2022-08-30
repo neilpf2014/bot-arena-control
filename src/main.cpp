@@ -189,8 +189,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
           {
             BtnCycle = GameStart.cycleCount();
             BtnCycle = GameReset.cycleCount();
-            //match = MatchState::starting;
-            match = MatchState::in_progress;
+            match = MatchState::starting;
           }
         }
       }
@@ -230,7 +229,7 @@ void blink(u_int8_t &state, uint64_t &lastBlink, u_int8_t ledGPIO)
 }
 
 // handle lights here
-void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
+void setLights(MatchState &match, bool Match_Reset)
 {
   
 // all lights off
@@ -260,11 +259,9 @@ void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
   // blink yellow for 3 sec, red out, green out
   if(match == MatchState::starting)
   {
-    if((millis()-SDtimer) < STARTUP_DELAY)
-      blink(gBLstate, gBLtimer, Y_LIGHT);
-    else
-      match=MatchState::in_progress;
-    SDtimer = millis();
+    digitalWrite(G_LIGHT,LOW);
+    blink(gBLstate, gBLtimer, Y_LIGHT);
+    digitalWrite(R_LIGHT,LOW);
   }
   // match is paused
   // red is lit yellow is blinking
@@ -287,7 +284,7 @@ void setLights(MatchState &match, u_int8_t Match_Reset, u_int64_t &SDtimer)
 }
 
 // light debug function
-void LightDebugPrint(MatchState match, u_int8_t Match_Reset, u_int64_t SDtimer)
+void LightDebugPrint(MatchState match, u_int8_t Match_Reset)
 {
   switch (match)
   {
@@ -303,13 +300,6 @@ void LightDebugPrint(MatchState match, u_int8_t Match_Reset, u_int64_t SDtimer)
   case MatchState::starting:
     Serial.println("starting");
     break;
-  /*case MatchState::in_progress:
-  {
-    Serial.print("in_progress time ");
-    Serial.println(SDtimer);
-    break;
-  }
-  */
   case MatchState::ending:
     Serial.println("ending");
     break;
@@ -333,15 +323,6 @@ void LightDebugPrint(MatchState match, u_int8_t Match_Reset, u_int64_t SDtimer)
   default:
     break;
   }
-  /*if(match == MatchState::starting)
-  {
-    if((millis()-SDtimer) < STARTUP_DELAY)
-      blink(gBLstate, gBLtimer, Y_LIGHT);
-    else
-      match=MatchState::in_progress;
-    SDtimer = millis();
-  }
-  */
 }
 
 // used to sound horn (yet another timer)
@@ -409,7 +390,6 @@ void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValu
   }
 }
 
-
 void setup() {
   Serial.begin(115200);
   // give the iCruze attiny time to boot
@@ -453,11 +433,12 @@ void loop()
   if ((millis()-Btn_timer) > MAIN_LOOP_DELAY)
   {
     readBtns(g_match, g_Match_Reset);
+
     // set startup delay - match will be inprogress after this is done
-    
-    /*
     if ((g_match == MatchState::starting)&&(gSDtimer == 0))
+    {
       gSDtimer = millis();
+    }
     else if (g_match == MatchState::starting)
     {
       CountDownMSec = STARTUP_DELAY -(millis() - gSDtimer);
@@ -469,20 +450,20 @@ void loop()
         gSDtimer = 0;
       }
     }
-    */
     Btn_timer = millis();
   }
+
   // handle lights
   #ifdef DEBUG
   if ((millis()-light_timer) > MAIN_LOOP_DELAY + 200)
   {
-    LightDebugPrint(g_match, g_Match_Reset, gMatchRunTime);
+    LightDebugPrint(g_match, g_Match_Reset);
     light_timer = millis();
   }
   #else
   if ((millis()-light_timer) > MAIN_LOOP_DELAY + 1)
   {
-    setLights(g_match, g_Match_Reset, gSDtimer);
+    setLights(g_match, g_Match_Reset);
     light_timer = millis();
   }
   #endif

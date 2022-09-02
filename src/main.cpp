@@ -36,7 +36,7 @@
 byte debugMode = DEBUG_ON;
 
 #define DBG(...) debugMode == DEBUG_ON ? Serial.println(__VA_ARGS__) : NULL
-#define DEBUG
+//#define DEBUG
 
 // button GPIO's ESP32 / Change for STM32
 #define TEAM_A_START 23
@@ -240,16 +240,14 @@ void setLights(MatchState &match, bool Match_Reset)
     digitalWrite(R_LIGHT,LOW);
   }
   // match in progress
-  if (match == in_progress)
+  if (match == MatchState::in_progress)
   {
     digitalWrite(G_LIGHT,HIGH);
     digitalWrite(Y_LIGHT,LOW);
     digitalWrite(R_LIGHT,LOW);
   }
   // match is stopped
-  // if ((g_match != in_progress) || (g_match != starting) || (g_match != paused) || (g_match != unpaused))
-  // not sure if enum can be used this way
-  if ((match < 3) && (match > 6))
+  if ((match != MatchState::in_progress) && (match != MatchState::starting) && (match != MatchState::ending)&& (!Match_Reset))
   {
     digitalWrite(G_LIGHT,LOW);
     //digitalWrite(Y_LIGHT,LOW);
@@ -326,6 +324,7 @@ void LightDebugPrint(MatchState match, u_int8_t Match_Reset)
 }
 
 // used to sound horn (yet another timer)
+// not tested
 void soundHorn(u_int8_t &hornBlast, uint64_t &hornTime, u_int32_t tootLen, u_int8_t GPIO)
 {
   u_int8_t state  = hornBlast % 2;
@@ -468,6 +467,7 @@ void loop()
   }
   #endif
   // handle horn
+  // needs work
   #ifdef DEBUG
   #else
   if ((millis()- Horn_timer) > MAIN_LOOP_DELAY * 2 )

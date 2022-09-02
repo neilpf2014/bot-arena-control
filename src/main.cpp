@@ -59,7 +59,7 @@ byte debugMode = DEBUG_ON;
 #define MATCH_LEN 180 // match len in sec ( 3 min)
 #define MATCH_END_WARN 15 // ending warn time sec
 #define BLINK_DELAY 500 // in ms
-#define STARTUP_DELAY 3000 //3 sec
+#define STARTUP_DELAY 5000 //5 sec
 #define MAIN_LOOP_DELAY 5 // in ms
 #define HORN_SHORT 1000 //ms
 #define HORN_LONG 2000 //ms
@@ -85,6 +85,7 @@ uint64_t Dis_sec;
 // Match state
 enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, ending, unpaused, paused, team_a_tap, team_b_tap, time_up, ko_end };
 enum MatchState g_match;
+enum MatchState last_match_state;
 bool g_Match_Reset;
 
 uint64_t gMatchRunTime; //match run time ms
@@ -115,8 +116,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
       BtnCycle =GameReset.cycleCount();
       //BtnCycle =GameReset.cycleCount();
       Match_Reset = false;
-      // DBG("test IP");
-      // pause hit
+
       if (GamePause.isCycled())
       {
         BtnCycle = GamePause.cycleCount();
@@ -254,7 +254,7 @@ void setLights(MatchState &match, bool Match_Reset)
     digitalWrite(R_LIGHT,HIGH);
   }
   // match is starting
-  // blink yellow for 3 sec, red out, green out
+  // blink yellow for x sec, red out, green out
   if(match == MatchState::starting)
   {
     digitalWrite(G_LIGHT,LOW);
@@ -330,7 +330,7 @@ void soundHorn(u_int8_t &hornBlast, uint64_t &hornTime, u_int32_t tootLen, u_int
   u_int8_t state  = hornBlast % 2;
   if((millis() - hornTime) > tootLen)
   {
-    if (state > 0)
+    if (state == 1)
     {
       digitalWrite(GPIO, HIGH);
     }
@@ -346,7 +346,8 @@ void soundHorn(u_int8_t &hornBlast, uint64_t &hornTime, u_int32_t tootLen, u_int
 //  match time control
 void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValue, bool &running, bool reset)
 {
-  if((l_match == MatchState::in_progress)&&(running == false))
+  // start timer
+	if((l_match == MatchState::in_progress)&&(running == false))
   {
       // reset timer at beginning of match
       StartTime = millis();
@@ -361,7 +362,6 @@ void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValu
       StartTime = millis() - timerValue;
       l_match = MatchState::in_progress;
   }
-
   //stop timer
   if((l_match != MatchState::in_progress) && (l_match != MatchState::ending))
   {
@@ -387,6 +387,9 @@ void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValu
       l_match = MatchState::time_up;
     }
   }
+	// set match end warning
+	if((l_match == MatchState::in_progress)&&(timerValue < (MATCH_END_WARN * 1000)))
+		l_match = MatchState::ending;
 }
 
 void setup() {
@@ -472,31 +475,22 @@ void loop()
   #else
   if ((millis()- Horn_timer) > MAIN_LOOP_DELAY * 2 )
   {
-      // short horn on start or pause
-      /*
-      if(g_match == MatchState::starting)
-      {
-        while (gHornBlast < 6)
-        {
-          soundHorn(gHornBlast,gTootTimer,HORN_SHORT,HORN);
-        }
-      }
-      else
-        if(g_match < 8)
-          gHornBlast = 0;
-      // long horn on match end
-      if(g_match > 7)
-      {
-        while (gHornBlast < 2)
-        {
-          soundHorn(gHornBlast,gTootTimer,HORN_LONG,HORN);
-        }
-      }
-      else
-        if(g_match!=MatchState::starting)
-          gHornBlast = 0;
-      */
-      Horn_timer = millis();
+		if(g_match == MatchState::starting)
+				gHornBlast = 1;
+		// short horn on start or pause
+		if(g_match == MatchState::in_progress)
+		{
+			while (gHornBlast < 2)
+				soundHorn(gHornBlast,gTootTimer,HORN_SHORT,HORN);
+		}  
+		// long horn on match end
+		if((g_match == MatchState::ko_end)||(g_match == MatchState::team_a_tap)||(g_match == MatchState::team_b_tap)||(g_match == MatchState::team_b_tap)||(gHornBlast<4))
+		{
+			gHornBlast++;
+			while (gHornBlast < 4)
+				soundHorn(gHornBlast,gTootTimer,HORN_LONG,HORN);
+		}
+		Horn_timer = millis();
   }
   #endif
 
@@ -527,60 +521,72 @@ void loop()
       Serial1.println(" Remaining");
       Serial1.println("Match in Progress");
     }
-    if(g_match == MatchState::paused)
+    else
     {
-      Serial1.print(Dis_min);
-      Serial1.print(":");
-      Serial1.printf("%02d",Dis_sec);
-      Serial1.println(" Remaining");
-      Serial1.println("--Paused --");
-    }
-    if(g_match == MatchState::starting)
-    {
-      Serial1.print("Starting in: ");
-      Serial1.printf("%02d",(CountDownMSec/1000));
-      Serial1.println();
-      Serial1.println("ALL READY-Starting");
-    }
-    if(g_match == MatchState::time_up)
-    {
-      Serial1.println("--- Time's Up ---");
-      Serial1.println("-- MATCH OVER ---");
-    }
-    if(g_match == MatchState::team_a_tap)
-    {
-      Serial1.print(Dis_min);
-      Serial1.print(":");
-      Serial1.printf("%02d",Dis_sec);
-      Serial1.println(" -MATCH OVER-");
-      Serial1.println("--TEAM A TAPOUT--");
-    }
-    if(g_match == MatchState::team_b_tap)
-    {
-      Serial1.print(Dis_min);
-      Serial1.print(":");
-      Serial1.printf("%02d",Dis_sec);
-      Serial1.println(" -MATCH OVER-");
-      Serial1.println("--TEAM B TAPOUT--");
-    }
-    if(g_match == MatchState::ko_end)
-    {
-      Serial1.print(Dis_min);
-      Serial1.print(":");
-      Serial1.printf("%02d",Dis_sec);
-      Serial1.println(" -MATCH OVER-");
-      Serial1.println("-- BY KNOCKOUT --");
-    }
-    if(g_match == MatchState::all_ready)
-    {
-      Serial1.println("-- 3 min clock ---");
-      Serial1.println("--- ALL READY ---");
-    }
-    if((g_match != MatchState::all_ready)&&(g_Match_Reset == true)&&(g_match != MatchState::starting))
-    {
-      Serial1.println("-- WAITING FOR ---");
-      Serial1.println("----- READY -----");
-    }
+      if(g_match == MatchState::starting)
+      {
+        Serial1.print("Starting in: ");
+        Serial1.printf("%02d",(CountDownMSec/1000));
+        Serial1.println();
+        Serial1.println("ALL READY-Starting");
+      }
+			else
+			{
+			// this should fix some of the flashing display issues
+			// don't update display unless stuff has changed	
+				if(g_match != last_match_state)
+				{
+					if(g_match == MatchState::paused)
+					{
+						Serial1.print(Dis_min);
+						Serial1.print(":");
+						Serial1.printf("%02d",Dis_sec);
+						Serial1.println(" Remaining");
+						Serial1.println("--Paused --");
+					}
+					if(g_match == MatchState::time_up)
+					{
+						Serial1.println("--- Time's Up ---");
+						Serial1.println("-- MATCH OVER ---");
+					}
+					if(g_match == MatchState::team_a_tap)
+					{
+						Serial1.print(Dis_min);
+						Serial1.print(":");
+						Serial1.printf("%02d",Dis_sec);
+						Serial1.println(" -MATCH OVER-");
+						Serial1.println("--TEAM A TAPOUT--");
+					}
+					if(g_match == MatchState::team_b_tap)
+					{
+						Serial1.print(Dis_min);
+						Serial1.print(":");
+						Serial1.printf("%02d",Dis_sec);
+						Serial1.println(" -MATCH OVER-");
+						Serial1.println("--TEAM B TAPOUT--");
+					}
+					if(g_match == MatchState::ko_end)
+					{
+						Serial1.print(Dis_min);
+						Serial1.print(":");
+						Serial1.printf("%02d",Dis_sec);
+						Serial1.println(" -MATCH OVER-");
+						Serial1.println("-- BY KNOCKOUT --");
+					}
+					if(g_match == MatchState::all_ready)
+					{
+						Serial1.println("-- 3 min clock ---");
+						Serial1.println("--- ALL READY ---");
+					}
+					if((g_match != MatchState::all_ready)&&(g_Match_Reset == true)&&(g_match != MatchState::starting))
+					{
+						Serial1.println("-- WAITING FOR ---");
+						Serial1.println("----- READY -----");
+					}
+					last_match_state = g_match;
+				}
+			}
+    }	
     Display_timer = millis();
   }
 }

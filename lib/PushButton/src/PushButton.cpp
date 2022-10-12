@@ -15,6 +15,9 @@ PushButton::PushButton(unsigned int pin)
 	bPressed = 0;
 	cycles = 0;
 	isCycle = 0;
+	longPressdelay = DEF_PRESSDELAY;
+	longPressValue = 0;
+	longPressInitMS = 0;
 }
 
 // pin and 0 for pull low / 1 pull high
@@ -32,6 +35,9 @@ PushButton::PushButton(unsigned int pin, unsigned int hilo)
 	bPressed = 0;
 	cycles = 0;
 	isCycle = 0;
+	longPressdelay = DEF_PRESSDELAY;
+	longPressValue = 0;
+	longPressInitMS = 0;
 }
 
 // call in loop to update state
@@ -59,10 +65,19 @@ void PushButton::update()
 			bPressed = true;
 		else
 			bPressed = false;
+		// set long press counter here
+		// note: this will get reset on button cycle, i.e this is always the latest long press
+		if(bPressed)
+		{
+			if (longPressInitMS == 0)
+				longPressInitMS = millis();
+			longPressValue = millis() - longPressInitMS;
+		}
 		if (PrevPress && !(bPressed))// count cycle on rising
 		{
 			isCycle = true;
 			cycles++;
+			longPressInitMS = 0;// reset long press
 		}
 		btnState = BS;
 		Pmils = Cmils;
@@ -89,5 +104,19 @@ uint8_t PushButton::down()
 {
 	return bPressed;
 }
-
+// set long press delay mills
+void PushButton::setLongPressMS(unsigned int delay)
+{
+	longPressdelay = delay;
+}
+// retrun the long press value if it excedes the delay
+uint64_t PushButton::getLongPressMS()
+{
+	uint64_t tempValue;
+	if (longPressValue > longPressdelay)
+		tempValue = longPressValue;
+	else
+		tempValue = 0;
+	return tempValue;
+}
 

@@ -48,10 +48,11 @@ byte debugMode = DEBUG_ON;
 #define MATCH_END 27
 #define MATCH_RESET 14
 // tower signal light GPIO's
-#define R_LIGHT 2
-#define Y_LIGHT 4
-#define G_LIGHT 5
-#define HORN 13
+#define R_LIGHT 5
+#define R_LIGHT_2 4
+#define Y_LIGHT 12
+#define G_LIGHT 13
+#define HORN 2
 
 #define D_SER_TX 17
 #define D_SER_RX 16
@@ -64,6 +65,8 @@ byte debugMode = DEBUG_ON;
 #define HORN_SHORT 1000 //ms
 #define HORN_LONG 2000 //ms
 #define DIS_DELAY 200 //ms display update rate
+#define ADD_TIME_BTN_DELAY 2000 //ms delay to count add time btn as "down"
+#define ADD_TIME_DIVISOR 200
 
 PushButton Start_A(TEAM_A_START);
 PushButton End_A(TEAM_A_END);
@@ -74,6 +77,7 @@ PushButton GameOver(MATCH_END);
 PushButton GamePause(MATCH_PAUSE);
 PushButton GameReset(MATCH_RESET);
 
+// timer var for stuff
 uint64_t Btn_timer;
 uint64_t light_timer;
 uint64_t Horn_timer;
@@ -90,19 +94,22 @@ bool g_Match_Reset;
 
 uint64_t gMatchRunTime; //match run time ms
 uint64_t gMatchStartTime; //match start time ms
+uint64_t gTempRunTime; //time ms
 uint64_t MatchSecRemain; // sec remaining
 int64_t CountDownMSec; // count down
+int secToAdd; //
 bool isTimerRunning;
 uint64_t gSDtimer; // used for start delay
 uint64_t gBLtimer; // for light blinking
 uint8_t gBLstate; // for light blinking
 uint64_t gTootTimer; //for horn
-uint8_t gHornState; // for horn
-uint8_t gHornBlast;
+uint8_t gHornBlast; // for horn
+uint64_t gAddSecTimer; // for the "add sec" function
+uint8_t gMatchOverFlag; // Set for any state thats "game over"
 
 // button reading and state setting is done here
 void readBtns(MatchState &match, bool &Match_Reset)
-{
+{ 
   // note the button.cycleCount() resets the button press counter
   uint8_t BtnCycle;
 
@@ -143,8 +150,9 @@ void readBtns(MatchState &match, bool &Match_Reset)
       }
     }
     else
+		// match is not running these are active
     {
-      // match is ended these are active
+      
       // starting is the match start countdown state
       if ((match != MatchState::starting)&&(match != MatchState::paused)&&(match != MatchState::unpaused))
       {
@@ -196,19 +204,70 @@ void readBtns(MatchState &match, bool &Match_Reset)
     // match paused
       else
       {
-        if(match == MatchState::paused)
+        //note update is called to use reset, pause and end button to adjust time on clock
+				if(match == MatchState::paused)
         {
           GameStart.update();
+          GamePause.update();
+          GameReset.update();
+          GameOver.update();
           if(GameStart.isCycled())
           {
             match = MatchState::unpaused;
             BtnCycle = GameStart.cycleCount();
+            BtnCycle = GameOver.cycleCount();
+            BtnCycle = GamePause.cycleCount();
+            BtnCycle = GameReset.cycleCount();
           }
         }
       }
     }
 }
-
+// this is the function used to add time to the clock
+// can use pause / reset / game over to set time
+void SetTimer(MatchState l_match, uint64_t &lTimervalue, uint64_t &tempTimervalue, int &lSecAdd)
+{
+  if (l_match == MatchState::paused)
+  {
+    uint8_t tempCycCount = 0;
+    int tempToAdd;
+    int minSec = (tempTimervalue / 1000) + 1;
+  // use pause to add time
+    if(GameOver.down())
+    {
+      if((GamePause.isCycled())||(GamePause.down())&&((lSecAdd+minSec) < (MATCH_LEN-2)))
+      {
+        if(GamePause.isCycled())
+        {
+          tempCycCount = GamePause.cycleCount();
+          lSecAdd = lSecAdd + tempCycCount;
+        }
+        if(GamePause.down())
+        {
+          tempToAdd = GamePause.getLongPressMS();
+          if (tempToAdd > 0)
+            lSecAdd = lSecAdd + (tempToAdd / ADD_TIME_DIVISOR); // add 5 sec for each 1 sec of BTN press
+        }
+      }
+      // use reset to remove time
+      if(((GameReset.isCycled())||(GameReset.down()))&&((lSecAdd+minSec) > 0))
+      {
+        if(GameReset.isCycled())
+        {
+          tempCycCount = GamePause.cycleCount();
+          lSecAdd = lSecAdd - tempCycCount;
+        }
+        if(GameReset.down())
+          {
+            tempToAdd = GameReset.getLongPressMS();
+            if (tempToAdd > 0)
+              lSecAdd = lSecAdd - (tempToAdd / ADD_TIME_DIVISOR); // add 5 sec for each 1 sec of BTN press
+          }
+      }
+    }
+    tempTimervalue= lTimervalue + (lSecAdd * 1000);
+  }
+}
 // used to blink the light tower
 void blink(u_int8_t &state, uint64_t &lastBlink, u_int8_t ledGPIO)
 {
@@ -343,7 +402,8 @@ void soundHorn(u_int8_t &hornBlast, uint64_t &hornTime, u_int32_t tootLen, u_int
   }
 }
 
-//  match time control
+// Match time control
+// timervalue is the match runtime in Milsec
 void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValue, bool &running, bool reset)
 {
   // start timer
@@ -398,28 +458,36 @@ void setup() {
   delay(1000);
   Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
   pinMode(R_LIGHT,OUTPUT);
+  pinMode(R_LIGHT_2,OUTPUT);
   pinMode (Y_LIGHT,OUTPUT);
   pinMode (G_LIGHT, OUTPUT);
+  pinMode (HORN, OUTPUT);
   delay(100);
   // check lights
   digitalWrite(G_LIGHT,HIGH);
   digitalWrite(Y_LIGHT,HIGH);
   digitalWrite(R_LIGHT,HIGH);
+  digitalWrite(R_LIGHT_2,HIGH);
   Serial.println("program starting");
   delay(1000);
   digitalWrite(G_LIGHT,LOW);
   digitalWrite(Y_LIGHT,LOW);
   digitalWrite(R_LIGHT,LOW);
+  digitalWrite(R_LIGHT_2,LOW);
   // check horn
   digitalWrite(HORN,HIGH);
-  delay(200);
+  delay(1000);
   digitalWrite(HORN,LOW);
+  // initalize everything
   g_Match_Reset = false;
   isTimerRunning = false;
   gMatchRunTime = 0;
   gMatchStartTime = 0;
+  gTempRunTime = 0;
   gSDtimer = 0;
   CountDownMSec = 0;
+  gHornBlast = 0;
+  gMatchOverFlag = 0;
   gBLtimer = millis();
   Btn_timer = millis();
   g_match = MatchState::time_up;
@@ -466,11 +534,18 @@ void loop()
   if ((millis()-light_timer) > MAIN_LOOP_DELAY + 1)
   {
     setLights(g_match, g_Match_Reset);
+    // don't think we need the below will remove once I'm sure the horn works
+    /*
+    if((g_match == MatchState::ko_end)||(g_match == MatchState::team_a_tap)||(g_match == MatchState::team_b_tap)||(g_match == MatchState::time_up))
+      gMatchOverFlag = 1;
+    else
+      gMatchOverFlag = 0;
+    */
     light_timer = millis();
   }
   #endif
   // handle horn
-  // needs work
+  // needs testing
   #ifdef DEBUG
   #else
   if ((millis()- Horn_timer) > MAIN_LOOP_DELAY * 2 )
@@ -484,11 +559,14 @@ void loop()
 				soundHorn(gHornBlast,gTootTimer,HORN_SHORT,HORN);
 		}  
 		// long horn on match end
-		if((g_match == MatchState::ko_end)||(g_match == MatchState::team_a_tap)||(g_match == MatchState::team_b_tap)||(g_match == MatchState::team_b_tap)||(gHornBlast<4))
+		if((gHornBlast<4) && (gHornBlast>0))
 		{
-			gHornBlast++;
+			gHornBlast++; //shouild be 3 now
 			while (gHornBlast < 4)
+      {
 				soundHorn(gHornBlast,gTootTimer,HORN_LONG,HORN);
+        gHornBlast = 0;
+      }
 		}
 		Horn_timer = millis();
   }
@@ -500,6 +578,21 @@ void loop()
     match_timer(g_match,gMatchStartTime,gMatchRunTime,isTimerRunning,g_Match_Reset);
     // count down timer display
     MatchSecRemain = MATCH_LEN - (gMatchRunTime / 1000);
+    if((isTimerRunning == false) && (g_Match_Reset == false))
+    {
+      // allow time adjustment here
+      if ((gTempRunTime > 5000) && (gTempRunTime < ((MATCH_LEN-10)*1000)))
+        SetTimer(g_match, gMatchRunTime, gTempRunTime, secToAdd);
+    }
+    else
+    {
+      if((isTimerRunning)&&(gTempRunTime > 0))
+      {
+        gMatchRunTime = gTempRunTime;
+        gTempRunTime = 0;
+        secToAdd = 0;
+      }
+    }
     Timer_timer = millis();
   }
 

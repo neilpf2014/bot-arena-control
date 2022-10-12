@@ -13,11 +13,16 @@ class PushButton
 {
 #define DOWN 1
 #define UP 0
+#define DEF_PRESSDELAY 1000
 protected:
 	uint8_t btnState;
 	uint8_t isCycle;
 	uint8_t bPressed;
 	uint8_t wasReleased = 0;
+	uint64_t longPressInitMS;
+	uint64_t longPressdelay;
+	uint64_t longPressValue;
+
 	unsigned int cycles;
 	int btnPin;
 	int _hilo;
@@ -38,6 +43,10 @@ public:
 	uint8_t cycleCount();
 	// is button currently pressed ? (T/F)
 	uint8_t down();
+	// use to set long press delay time in Mils
+	void setLongPressMS(unsigned int delay);
+	// get long press will return 0 if less the delay
+	uint64_t getLongPressMS();
 };
 #endif
 

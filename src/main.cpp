@@ -1,5 +1,17 @@
+/*
+**  Dev to use Mqtt to send the match status to the stream or other consuming application
+*
+*
+*
+*/
 #include <Arduino.h>
 #include <PushButton.h>
+#include <MQTThandler.h>
+#include <WiFi.h>
+#include <DNSServer.h>
+#include <WebServer.h>
+#include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
+#include <ESPmDNS.h>
 
 /*
 ** Robot Combat Arena Control Code
@@ -12,8 +24,97 @@
 ** NF 2022/06/04
 
 */
+//**** Wifi and MQTT stuff below *********************
+// Copied directly from the tested and working Moxie board project
+// Update these with values suitable for the broker used.
+const char* svrName = "pi-iot"; // if you have zeroconfig working
+IPAddress MQTTIp(192,168,1,26); // IP oF the MQTT broker if not
 
-// State diagram
+WiFiClient espClient;
+uint64_t lastMsg = 0;
+unsigned long MessID;
+
+uint64_t msgPeriod = 10000; //Message check interval in ms (10 sec for testing)
+
+String S_msg;
+String BtnArraySend; // hold CSV of button array
+int value = 0;
+uint8_t GotMail;
+uint8_t statusCode;
+uint8_t ConnectedToAP = false;
+MQTThandler MTQ(espClient, MQTTIp);
+
+// Wifi captive portal setup on ESP8266
+void configModeCallback(WiFiManager *myWiFiManager) {
+   Serial.println("Entered config mode");
+	Serial.println(WiFi.softAPIP());
+	digitalWrite(LED_BUILTIN, HIGH);
+	//if you used auto generated SSID, print it
+	Serial.println(myWiFiManager->getConfigPortalSSID());
+}
+
+void WiFiCP(uint8_t ResetAP)
+{
+	WiFiManager wifiManager;
+	//wifiManager.setAPCallback(configModeCallback);
+	if (ResetAP){
+		wifiManager.resetSettings();
+		wifiManager.setHostname("MoxieBoard");
+		wifiManager.autoConnect("MoxieConfigAP");
+	}
+	else
+	{
+		//wifiManager.setHostname("MoxieBoard");
+		wifiManager.autoConnect("MoxieConfigAP");
+	}
+
+	// these are used for debug
+	Serial.println("Print IP:");
+	Serial.println(WiFi.localIP());
+	// **************************
+	GotMail = false;
+	MTQ.setClientName("ESP32Client");
+	MTQ.subscribeIncomming("ConfirmMsg");
+	MTQ.subscribeOutgoing("BtnsOut");
+}
+
+// use to get ip from mDNS, return true if sucess
+uint8_t mDNShelper(void){
+	uint8_t logflag = true;
+	unsigned int mdns_qu_cnt = 0;
+
+	if (!MDNS.begin("esp32whatever")){
+    	Serial.println("Error setting up MDNS responder!");
+		logflag = false;
+		}
+	else 
+    	Serial.println("Finished intitializing the MDNS client...");
+	MQTTIp = MDNS.queryHost(svrName);
+  	while ((MQTTIp.toString() == "0.0.0.0") && (mdns_qu_cnt < 10)) {
+    	Serial.println("Trying again to resolve mDNS");
+    	delay(250);
+    	MQTTIp = MDNS.queryHost(svrName);
+		mdns_qu_cnt++;
+	  }
+	  if(MQTTIp.toString() == "0.0.0.0")
+	  	logflag = false;
+	  return logflag;
+}
+// send CSV line via MQTT -- This needs fixen
+void SendNewBtnMessage(){
+	MessID = millis();
+	BtnArraySend = "M" + String(MessID);
+  /*
+	for (size_t i = 0; i < NUM_BTNS; i++){
+		BtnArraySend = BtnArraySend + "," + String(BtnRecord[i]);
+	}
+  */
+	statusCode = MTQ.publish(BtnArraySend);
+}
+
+
+
+// State diagram for Arena control ********
 /* no match states:
     Reset and ready for start ( solid yellow )
       team a ready
@@ -30,6 +131,7 @@
     10 sec count down (blinking green)
   Horn will sound at match end, time up or team tapout
 */
+
 // inline echo for debug
 #define DEBUG_ON 1
 #define DEBUG_OFF 0

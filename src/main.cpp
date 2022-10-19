@@ -36,11 +36,12 @@ unsigned long MessID;
 
 uint64_t msgPeriod = 10000; //Message check interval in ms (10 sec for testing)
 
-String S_msg;
-String BtnArraySend; // hold CSV of button array
+String S_Stat_msg;
+String S_Match;
 int value = 0;
 uint8_t GotMail;
 uint8_t statusCode;
+
 uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
 
@@ -101,15 +102,17 @@ uint8_t mDNShelper(void){
 	  return logflag;
 }
 // send CSV line via MQTT -- This needs fixen
-void SendNewBtnMessage(){
+uint8_t SendNewMessage(String MessOut){
+  uint8_t statusCode;
 	MessID = millis();
-	BtnArraySend = "M" + String(MessID);
+	MessOut = "M" + String(MessID);
   /*
 	for (size_t i = 0; i < NUM_BTNS; i++){
 		BtnArraySend = BtnArraySend + "," + String(BtnRecord[i]);
 	}
   */
-	statusCode = MTQ.publish(BtnArraySend);
+	statusCode = MTQ.publish(MessOut);
+  return statusCode;
 }
 
 
@@ -469,46 +472,82 @@ void setLights(MatchState &match, bool Match_Reset)
   }
 }
 
-// light debug function
-void MstateDebugPrint(MatchState match, u_int8_t Match_Reset)
+// was debug now setting Match string for MQTT
+void MstateSetMQTT(MatchState match, u_int8_t Match_Reset)
 {
   switch (match)
   {
   case MatchState::all_ready:
+  {
     Serial.println("All ready");
+    S_Match = "all_ready";
+  }
     break;
   case MatchState::team_a_ready:
+  {
     Serial.println("team_a_ready");
+    S_Match = "team_a_ready";
+  }
     break;
   case MatchState::team_b_ready:
+  {
     Serial.println("team_b_ready");
+    S_Match = "team_b_ready";
+  }
     break;
   case MatchState::starting:
+  {
     Serial.println("starting");
+    S_Match = "starting";
+  }
     break;
   case MatchState::ending:
+  {
     Serial.println("ending");
+    S_Match = "ending";
+  }
     break;
   case MatchState::unpaused:
+  {
     Serial.println("unpaused");
+    S_Match = "unpaused";
+  }
     break;
   case MatchState::paused:
+  {
     Serial.println("paused");
+    S_Match = "paused";
+  }   
     break;
   case MatchState::team_a_tap:
+  {
     Serial.println("team_a_tap");
+    S_Match = "team_a_tap";
+  }  
     break;
   case MatchState::team_b_tap:
+  {
     Serial.println("team_b_tap");
+    S_Match = "team_b_tap";
+  }
     break;
   case MatchState::in_progress:
+  {
     Serial.println("Match Running");
+    S_Match = "Match Running";
+  }
     break;
   case MatchState::time_up:
+  {
     Serial.println("time_up");
+    S_Match = "time_up";
+  }
     break;
   case MatchState::ko_end:
+  {
     Serial.println("ko_end");
+    S_Match = "ko_end";
+  }
   default:
     break;
   }
@@ -631,7 +670,7 @@ void setup() {
   Serial1.println("---Display Test----");
   Serial1.println("---Line 2----");
 }
-
+// Main Loop
 void loop() 
 {
   // Button reading is here
@@ -665,7 +704,7 @@ void loop()
     setLights(g_match, g_Match_Reset);
     if(debug_lastmatch != g_match)
     {
-      MstateDebugPrint(g_match, g_Match_Reset);
+      MstateSetMQTT(g_match, g_Match_Reset);
       debug_lastmatch = g_match;
     }
     light_timer = millis();
@@ -721,6 +760,7 @@ void loop()
         secToAdd = 0;
       }
     }
+    S_Stat_msg = S_Match + "," + String(MatchSecRemain);
     Timer_timer = millis();
   }
 

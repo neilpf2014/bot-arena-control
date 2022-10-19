@@ -1,4 +1,7 @@
 // pushbutton.h
+// NPF 2022-11-18
+// Pushbutton Library
+// Button handling class with debounce
 
 #ifndef _PUSHBUTTON_h
 #define _PUSHBUTTON_h

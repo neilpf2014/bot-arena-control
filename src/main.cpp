@@ -101,21 +101,12 @@ uint8_t mDNShelper(void){
 	  	logflag = false;
 	  return logflag;
 }
-// send CSV line via MQTT -- This needs fixen
+// send CSV line via MQTT
 uint8_t SendNewMessage(String MessOut){
   uint8_t statusCode;
-	MessID = millis();
-	MessOut = "M" + String(MessID);
-  /*
-	for (size_t i = 0; i < NUM_BTNS; i++){
-		BtnArraySend = BtnArraySend + "," + String(BtnRecord[i]);
-	}
-  */
 	statusCode = MTQ.publish(MessOut);
   return statusCode;
 }
-
-
 
 // State diagram for Arena control ********
 /* no match states:
@@ -215,7 +206,7 @@ uint8_t gHornBlast; // for horn
 uint8_t gHornSounded; // for horn
 uint64_t gAddSecTimer; // for the "add sec" function
 uint8_t gMatchOverFlag; // Set for any state thats "game over"
-
+uint8_t MQstatcode; // for MQTT pubsub
 // button reading and state setting is done here
 void readBtns(MatchState &match, bool &Match_Reset)
 { 
@@ -661,6 +652,7 @@ void setup() {
   gHornBlast = 0;
   gHornSounded = 0;
   gMatchOverFlag = 0;
+  MatchSecRemain = 0;
   gBLtimer = millis();
   gBLtimer_2 = millis();
   Btn_timer = millis();
@@ -760,7 +752,7 @@ void loop()
         secToAdd = 0;
       }
     }
-    S_Stat_msg = S_Match + "," + String(MatchSecRemain);
+    S_Stat_msg = String(millis()) + S_Match + "," + String(MatchSecRemain);
     Timer_timer = millis();
   }
 
@@ -851,6 +843,8 @@ void loop()
 				}
 			}
     }	
+    // send status via MQTT
+    MQstatcode = SendNewMessage(S_Stat_msg);
     Display_timer = millis();
   }
 }

@@ -153,7 +153,7 @@ byte debugMode = DEBUG_ON;
 #define D_SER_TX 17
 #define D_SER_RX 16
 
-#define MATCH_LEN 180 // match len in sec ( 3 min)
+#define MATCH_LEN 150// match len in sec ( 2.5 min)
 #define MATCH_END_WARN 15 // ending warn time sec
 #define BLINK_DELAY 500 // in ms
 #define STARTUP_DELAY 5000 //5 sec
@@ -869,7 +869,7 @@ void loop()
   if ((millis()-PubSub_timer) > PUBSUB_DELAY)
   {
      // send / recieve status via MQTT
-    S_Stat_msg = String(millis()) + S_Match + "," + String(MatchSecRemain);
+    S_Stat_msg = String(millis()) + "," + S_Match + "," + String(MatchSecRemain);
     MQstatcode = statusCode = MTQ.publish(S_Stat_msg);
     MQstatcode = MTQ.update();
     if (MQstatcode == true){

@@ -27,8 +27,8 @@
 //**** Wifi and MQTT stuff below *********************
 // Copied directly from the tested and working Moxie board project
 // Update these with values suitable for the broker used.
-const char* svrName = "pi-iot"; // if you have zeroconfig working
-IPAddress MQTTIp(192,168,1,26); // IP oF the MQTT broker if not
+const char* svrName = "Wyse-5070-ubuntu02"; // if you have zeroconfig working
+IPAddress MQTTIp(192,168,1,140); // IP oF the MQTT broker if not
 
 WiFiClient espClient;
 uint64_t lastMsg = 0;
@@ -60,13 +60,13 @@ void WiFiCP(uint8_t ResetAP)
 	//wifiManager.setAPCallback(configModeCallback);
 	if (ResetAP){
 		wifiManager.resetSettings();
-		wifiManager.setHostname("MoxieBoard");
-		wifiManager.autoConnect("MoxieConfigAP");
+		wifiManager.setHostname("BotArena");
+		wifiManager.autoConnect("BotConfigAP");
 	}
 	else
 	{
 		//wifiManager.setHostname("MoxieBoard");
-		wifiManager.autoConnect("MoxieConfigAP");
+		wifiManager.autoConnect("BotConfigAP");
 	}
 
 	// these are used for debug
@@ -101,7 +101,7 @@ uint8_t mDNShelper(void){
 	  	logflag = false;
 	  return logflag;
 }
-// send CSV line via MQTT
+// send CSV line via MQTT -- this isn't called by anything
 uint8_t SendNewMessage(String MessOut){
   uint8_t statusCode;
 	statusCode = MTQ.publish(MessOut);
@@ -161,6 +161,7 @@ byte debugMode = DEBUG_ON;
 #define HORN_SHORT 1000 //ms
 #define HORN_LONG 2000 //ms
 #define DIS_DELAY 200 //ms display update rate
+#define PUBSUB_DELAY 200 //ms pubsub update rate
 #define ADD_TIME_BTN_DELAY 2000 //ms delay to count add time btn as "down"
 #define ADD_TIME_DIVISOR 200
 
@@ -179,6 +180,7 @@ uint64_t light_timer;
 uint64_t Horn_timer;
 uint64_t Timer_timer;
 uint64_t Display_timer;
+uint64_t PubSub_timer; //use for pubsub
 uint64_t Dis_min;
 uint64_t Dis_sec;
 
@@ -207,6 +209,7 @@ uint8_t gHornSounded; // for horn
 uint64_t gAddSecTimer; // for the "add sec" function
 uint8_t gMatchOverFlag; // Set for any state thats "game over"
 uint8_t MQstatcode; // for MQTT pubsub
+String Msgcontents;
 // button reading and state setting is done here
 void readBtns(MatchState &match, bool &Match_Reset)
 { 
@@ -616,9 +619,25 @@ void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValu
 }
 
 void setup() {
+  bool testIP;
+  String TempIP = MQTTIp.toString();
   Serial.begin(115200);
   // give the iCruze attiny time to boot
   delay(1000);
+  // these line set up the access point, mqtt & other internet stuff
+  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  WiFiCP(false);
+  testIP = mDNShelper();
+	if (!testIP){
+		MQTTIp.fromString(TempIP);
+	}
+	Serial.print("IP address of server: ");
+	Serial.println(MQTTIp.toString());
+	MTQ.setServerIP(MQTTIp);
+  MTQ.subscribeOutgoing("botcontrol");
+  MTQ.subscribeIncomming("timecontrol");
+	Serial.println("Started Moxie !!!!");
+
   Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
   pinMode(R_LIGHT,OUTPUT);
   pinMode(R_LIGHT_2,OUTPUT);
@@ -656,6 +675,7 @@ void setup() {
   gBLtimer = millis();
   gBLtimer_2 = millis();
   Btn_timer = millis();
+  PubSub_timer = millis();
   g_match = MatchState::time_up;
   debug_lastmatch = MatchState::time_up;
   delay(100);
@@ -752,7 +772,6 @@ void loop()
         secToAdd = 0;
       }
     }
-    S_Stat_msg = String(millis()) + S_Match + "," + String(MatchSecRemain);
     Timer_timer = millis();
   }
 
@@ -843,8 +862,24 @@ void loop()
 				}
 			}
     }	
-    // send status via MQTT
-    MQstatcode = SendNewMessage(S_Stat_msg);
     Display_timer = millis();
+  }
+
+  // Loop to deal with Pubsub
+  if ((millis()-PubSub_timer) > PUBSUB_DELAY)
+  {
+     // send / recieve status via MQTT
+    S_Stat_msg = String(millis()) + S_Match + "," + String(MatchSecRemain);
+    MQstatcode = statusCode = MTQ.publish(S_Stat_msg);
+    MQstatcode = MTQ.update();
+    if (MQstatcode == true){
+      //** debug code will blink LED on incomming****
+      Serial.print("message is: ");
+      Msgcontents = MTQ.GetMsg();
+      Serial.println(Msgcontents);
+      // ******************************************
+      MQstatcode = false;
+	}
+    PubSub_timer = millis();
   }
 }

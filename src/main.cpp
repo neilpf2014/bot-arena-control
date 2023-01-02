@@ -1,9 +1,7 @@
 /*
 **  Dev to use Mqtt to send the match status to the stream or other consuming application
-*
-*
-*
 */
+
 #include <Arduino.h>
 #include <PushButton.h>
 #include <MQTThandler.h>
@@ -20,13 +18,56 @@
 ** ready and tap out for 2 teams
 ** Match start / pause / end /reset for ref
 ** Serial out to hacked iCruze display boards
-** Will control 1 or 2 "stoplight" towers with signal horns
-** NF 2022/06/04
-
+** Will control 2 "stoplight" towers with signal horns
+** NF 2022/06/04, updated 2023/01/01
 */
+
+// All #define's  at top of code to avoid issues
+// inline echo for debug
+#define DEBUG_ON 1
+#define DEBUG_OFF 0
+byte debugMode = DEBUG_ON;
+
+#define DBG(...) debugMode == DEBUG_ON ? Serial.println(__VA_ARGS__) : NULL
+// #define DEBUG
+
+// button GPIO's ESP32 / Change for STM32
+#define TEAM_A_START 23
+#define TEAM_A_END 22
+#define TEAM_B_START 33
+#define TEAM_B_END 32
+#define MATCH_START 25
+#define MATCH_PAUSE 26
+#define MATCH_END 27
+#define MATCH_RESET 14
+// tower signal light GPIO's
+#define R_LIGHT 5
+#define R_LIGHT_2 4
+#define Y_LIGHT 12
+#define G_LIGHT 13
+#define HORN 2
+
+#define D_SER_TX 17
+#define D_SER_RX 16
+
+#define MATCH_LEN 150// match len in sec ( 2.5 min)
+#define MATCH_END_WARN 15 // ending warn time sec
+#define BLINK_DELAY 500 // in ms
+#define STARTUP_DELAY 5000 //5 sec
+#define MAIN_LOOP_DELAY 5 // in ms
+#define HORN_SHORT 1000 //ms
+#define HORN_LONG 2000 //ms
+#define DIS_DELAY 200 //ms display update rate
+#define PUBSUB_DELAY 200 //ms pubsub update rate
+#define ADD_TIME_BTN_DELAY 2000 //ms delay to count add time btn as "down"
+#define ADD_TIME_DIVISOR 200
+
+#define AP_DELAY 2000
+
 //**** Wifi and MQTT stuff below *********************
 // Copied directly from the tested and working Moxie board project
 // Update these with values suitable for the broker used.
+
 const char* svrName = "Wyse-5070-ubuntu02"; // if you have zeroconfig working
 IPAddress MQTTIp(192,168,1,140); // IP oF the MQTT broker if not
 
@@ -51,7 +92,7 @@ const char* inTopic= "timecontrol";
 void configModeCallback(WiFiManager *myWiFiManager) {
    Serial.println("Entered config mode");
 	Serial.println(WiFi.softAPIP());
-	digitalWrite(LED_BUILTIN, HIGH);
+	digitalWrite(G_LIGHT, HIGH); // LED_BUILTIN is the horn !!
 	//if you used auto generated SSID, print it
 	Serial.println(myWiFiManager->getConfigPortalSSID());
 }
@@ -128,45 +169,6 @@ uint8_t SendNewMessage(String MessOut){
   Horn will sound at match end, time up or team tapout
 */
 
-// inline echo for debug
-#define DEBUG_ON 1
-#define DEBUG_OFF 0
-byte debugMode = DEBUG_ON;
-
-#define DBG(...) debugMode == DEBUG_ON ? Serial.println(__VA_ARGS__) : NULL
-//#define DEBUG
-
-// button GPIO's ESP32 / Change for STM32
-#define TEAM_A_START 23
-#define TEAM_A_END 22
-#define TEAM_B_START 33
-#define TEAM_B_END 32
-#define MATCH_START 25
-#define MATCH_PAUSE 26
-#define MATCH_END 27
-#define MATCH_RESET 14
-// tower signal light GPIO's
-#define R_LIGHT 5
-#define R_LIGHT_2 4
-#define Y_LIGHT 12
-#define G_LIGHT 13
-#define HORN 2
-
-#define D_SER_TX 17
-#define D_SER_RX 16
-
-#define MATCH_LEN 150// match len in sec ( 2.5 min)
-#define MATCH_END_WARN 15 // ending warn time sec
-#define BLINK_DELAY 500 // in ms
-#define STARTUP_DELAY 5000 //5 sec
-#define MAIN_LOOP_DELAY 5 // in ms
-#define HORN_SHORT 1000 //ms
-#define HORN_LONG 2000 //ms
-#define DIS_DELAY 200 //ms display update rate
-#define PUBSUB_DELAY 200 //ms pubsub update rate
-#define ADD_TIME_BTN_DELAY 2000 //ms delay to count add time btn as "down"
-#define ADD_TIME_DIVISOR 200
-
 PushButton Start_A(TEAM_A_START);
 PushButton End_A(TEAM_A_END);
 PushButton Start_B(TEAM_B_START);
@@ -212,6 +214,7 @@ uint64_t gAddSecTimer; // for the "add sec" function
 uint8_t gMatchOverFlag; // Set for any state thats "game over"
 uint8_t MQstatcode; // for MQTT pubsub
 String Msgcontents;
+
 // button reading and state setting is done here
 void readBtns(MatchState &match, bool &Match_Reset)
 { 
@@ -328,6 +331,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
       }
     }
 }
+
 // this is the function used to add time to the clock
 // can use pause / reset / game over to set time
 void SetTimer(MatchState l_match, uint64_t &lTimervalue, uint64_t &tempTimervalue, int &lSecAdd)
@@ -622,15 +626,28 @@ void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValu
 		l_match = MatchState::ending;
 }
 
-void setup() {
+// separate the Wifi / MQTT init from other setup stuff
+void IOTsetup()
+{
   bool testIP;
+  uint64_t APmodeCKtimer;
+  uint8_t Btnstate;
+  uint8_t tempint;
+  APmodeCKtimer = millis();
+  Btnstate = 0;
+
+  // Will wait 2 sec and check for reset to be held down / pressed
+  while ((APmodeCKtimer + AP_DELAY) > millis())
+  {
+    if(GameReset.down())
+      Btnstate = 1;
+    GameReset.update();
+  }
+  tempint = GameReset.cycleCount();
   String TempIP = MQTTIp.toString();
-  Serial.begin(115200);
-  // give the iCruze attiny time to boot
-  delay(1000);
   // these lines set up the access point, mqtt & other internet stuff
-  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED  ?? WARNING this might also be the horn GPIO ??
-  WiFiCP(false);
+  pinMode(G_LIGHT, OUTPUT);     // Initialize the Green for Wifi
+  WiFiCP(Btnstate);
   testIP = mDNShelper();
 	if (!testIP){
 		MQTTIp.fromString(TempIP);
@@ -638,14 +655,22 @@ void setup() {
 	Serial.print("IP address of server: ");
 	Serial.println(MQTTIp.toString());
 	MTQ.setServerIP(MQTTIp);
+  digitalWrite(G_LIGHT, LOW); //turn off the light if on from config
   // **********************************************************
+}
+
+void setup() {
+  
+  Serial.begin(115200);
+  IOTsetup();
+  // give the iCruze attiny time to boot
+  delay(500);
   Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
   pinMode(R_LIGHT,OUTPUT);
   pinMode(R_LIGHT_2,OUTPUT);
   pinMode (Y_LIGHT,OUTPUT);
   pinMode (G_LIGHT, OUTPUT);
   pinMode (HORN, OUTPUT);
-  delay(100);
   // check lights
   digitalWrite(G_LIGHT,HIGH);
   digitalWrite(Y_LIGHT,HIGH);
@@ -680,10 +705,10 @@ void setup() {
   g_match = MatchState::time_up;
   debug_lastmatch = MatchState::time_up;
   S_Match = "init";
-  delay(100);
   Serial1.println("---Display Test----");
   Serial1.println("---Line 2----");
 }
+
 // Main Loop
 void loop() 
 {
@@ -885,7 +910,7 @@ void loop()
       Serial.println(Msgcontents);
       // ******************************************
       GotMail = false;
-	}
+	  }
     PubSub_timer = millis();
   }
 }

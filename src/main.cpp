@@ -44,6 +44,8 @@ uint8_t statusCode;
 
 uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
+const char* outTopic= "botcontrol";
+const char* inTopic= "timecontrol";
 
 // Wifi captive portal setup on ESP8266
 void configModeCallback(WiFiManager *myWiFiManager) {
@@ -75,8 +77,8 @@ void WiFiCP(uint8_t ResetAP)
 	// **************************
 	GotMail = false;
 	MTQ.setClientName("ESP32Client");
-	MTQ.subscribeIncomming("ConfirmMsg");
-	MTQ.subscribeOutgoing("BtnsOut");
+	MTQ.subscribeIncomming(inTopic);
+	MTQ.subscribeOutgoing(outTopic);
 }
 
 // use to get ip from mDNS, return true if sucess
@@ -467,84 +469,86 @@ void setLights(MatchState &match, bool Match_Reset)
 }
 
 // was debug now setting Match string for MQTT
-void MstateSetMQTT(MatchState match, u_int8_t Match_Reset)
+String MstateSetMQTT(MatchState match, u_int8_t Match_Reset)
 {
+  String S_temp;
   switch (match)
   {
   case MatchState::all_ready:
   {
     Serial.println("All ready");
-    S_Match = "all_ready";
+    S_temp = "all_ready";
   }
     break;
   case MatchState::team_a_ready:
   {
     Serial.println("team_a_ready");
-    S_Match = "team_a_ready";
+    S_temp = "team_a_ready";
   }
     break;
   case MatchState::team_b_ready:
   {
     Serial.println("team_b_ready");
-    S_Match = "team_b_ready";
+    S_temp = "team_b_ready";
   }
     break;
   case MatchState::starting:
   {
     Serial.println("starting");
-    S_Match = "starting";
+    S_temp = "starting";
   }
     break;
   case MatchState::ending:
   {
     Serial.println("ending");
-    S_Match = "ending";
+    S_temp = "ending";
   }
     break;
   case MatchState::unpaused:
   {
     Serial.println("unpaused");
-    S_Match = "unpaused";
+    S_temp = "unpaused";
   }
     break;
   case MatchState::paused:
   {
     Serial.println("paused");
-    S_Match = "paused";
+    S_temp = "paused";
   }   
     break;
   case MatchState::team_a_tap:
   {
     Serial.println("team_a_tap");
-    S_Match = "team_a_tap";
+    S_temp = "team_a_tap";
   }  
     break;
   case MatchState::team_b_tap:
   {
     Serial.println("team_b_tap");
-    S_Match = "team_b_tap";
+    S_temp = "team_b_tap";
   }
     break;
   case MatchState::in_progress:
   {
     Serial.println("Match Running");
-    S_Match = "Match Running";
+    S_temp = "Match Running";
   }
     break;
   case MatchState::time_up:
   {
     Serial.println("time_up");
-    S_Match = "time_up";
+    S_temp = "time_up";
   }
     break;
   case MatchState::ko_end:
   {
     Serial.println("ko_end");
-    S_Match = "ko_end";
+    S_temp = "ko_end";
   }
   default:
     break;
   }
+  return S_temp;
 }
 
 // used to sound horn (yet another timer)
@@ -624,8 +628,8 @@ void setup() {
   Serial.begin(115200);
   // give the iCruze attiny time to boot
   delay(1000);
-  // these line set up the access point, mqtt & other internet stuff
-  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  // these lines set up the access point, mqtt & other internet stuff
+  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED  ?? WARNING this might also be the horn GPIO ??
   WiFiCP(false);
   testIP = mDNShelper();
 	if (!testIP){
@@ -634,10 +638,7 @@ void setup() {
 	Serial.print("IP address of server: ");
 	Serial.println(MQTTIp.toString());
 	MTQ.setServerIP(MQTTIp);
-  MTQ.subscribeOutgoing("botcontrol");
-  MTQ.subscribeIncomming("timecontrol");
-	Serial.println("Started Moxie !!!!");
-
+  // **********************************************************
   Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
   pinMode(R_LIGHT,OUTPUT);
   pinMode(R_LIGHT_2,OUTPUT);
@@ -660,7 +661,7 @@ void setup() {
   digitalWrite(HORN,HIGH);
   delay(1000);
   digitalWrite(HORN,LOW);
-  // initalize everything
+  // initalize everything else
   g_Match_Reset = false;
   isTimerRunning = false;
   gMatchRunTime = 0;
@@ -678,6 +679,7 @@ void setup() {
   PubSub_timer = millis();
   g_match = MatchState::time_up;
   debug_lastmatch = MatchState::time_up;
+  S_Match = "init";
   delay(100);
   Serial1.println("---Display Test----");
   Serial1.println("---Line 2----");
@@ -685,12 +687,12 @@ void setup() {
 // Main Loop
 void loop() 
 {
-  // Button reading is here
+  // Button reading is done here
   if ((millis()-Btn_timer) > MAIN_LOOP_DELAY)
   {
     readBtns(g_match, g_Match_Reset);
 
-    // set startup delay - match will be inprogress after this is done
+    // set startup delay - match will be in-progress after this
     if ((g_match == MatchState::starting)&&(gSDtimer == 0))
     {
       gSDtimer = millis();
@@ -700,7 +702,7 @@ void loop()
       CountDownMSec = STARTUP_DELAY -(millis() - gSDtimer);
       if (CountDownMSec < 5)
       {
-        // start match reset count down timer
+        // start match / reset count down timer
         g_match = MatchState::in_progress;
         CountDownMSec = 0;
         gSDtimer = 0;
@@ -752,6 +754,7 @@ void loop()
   }
 
   // update match timer
+
   if ((millis() + Timer_timer) > MAIN_LOOP_DELAY)
   {
     match_timer(g_match,gMatchStartTime,gMatchRunTime,isTimerRunning,g_Match_Reset);
@@ -777,6 +780,7 @@ void loop()
 
   // update char display
   // will send info out via serial
+
   if ((millis()-Display_timer) > DIS_DELAY)
   {
     // using the 2 x 20 line iCruze display
@@ -808,7 +812,7 @@ void loop()
 			else
 			{
 			// this should fix some of the flashing display issues
-			// don't update display unless stuff has changed	
+			// Won't update display unless stuff has changed	
 				if(g_match != last_match_state)
 				{
 					if(g_match == MatchState::paused)
@@ -865,20 +869,22 @@ void loop()
     Display_timer = millis();
   }
 
-  // Loop to deal with Pubsub
+  // Deal with MQTT Pubsub
   if ((millis()-PubSub_timer) > PUBSUB_DELAY)
   {
      // send / recieve status via MQTT
-    S_Stat_msg = String(millis()) + "," + S_Match + "," + String(MatchSecRemain);
-    MQstatcode = statusCode = MTQ.publish(S_Stat_msg);
-    MQstatcode = MTQ.update();
-    if (MQstatcode == true){
-      //** debug code will blink LED on incomming****
+    S_Match = MstateSetMQTT(g_match, g_Match_Reset);
+    // this should be sending cur mills,state_code,state string, match sec remain as the message
+    S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
+    MQstatcode = MTQ.publish(S_Stat_msg);
+    GotMail = MTQ.update();
+    if (GotMail == true){
+      //** debug code *****************************
       Serial.print("message is: ");
       Msgcontents = MTQ.GetMsg();
       Serial.println(Msgcontents);
       // ******************************************
-      MQstatcode = false;
+      GotMail = false;
 	}
     PubSub_timer = millis();
   }

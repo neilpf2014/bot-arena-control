@@ -189,7 +189,7 @@ uint64_t Dis_min;
 uint64_t Dis_sec;
 
 // Match state
-enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, ending, unpaused, paused, team_a_tap, team_b_tap, time_up, ko_end };
+enum MatchState{ all_ready, team_a_ready, team_b_ready, starting, in_progress, ending, unpaused, paused, team_a_tap, team_b_tap, time_up, ko_end, sysint };
 enum MatchState g_match;
 enum MatchState last_match_state;
 enum MatchState debug_lastmatch;
@@ -484,6 +484,12 @@ String MstateSetMQTT(MatchState match, u_int8_t Match_Reset)
     S_temp = "all_ready";
   }
     break;
+  case MatchState::sysint:
+  {
+    Serial.println("System_startup");
+    S_temp = "system_startup";
+  }
+    break;
   case MatchState::team_a_ready:
   {
     Serial.println("team_a_ready");
@@ -702,7 +708,7 @@ void setup() {
   gBLtimer_2 = millis();
   Btn_timer = millis();
   PubSub_timer = millis();
-  g_match = MatchState::time_up;
+  g_match = MatchState::sysint;
   debug_lastmatch = MatchState::time_up;
   S_Match = "init";
   Serial1.println("---Display Test----");

@@ -99,17 +99,28 @@ void configModeCallback(WiFiManager *myWiFiManager) {
 
 void WiFiCP(uint8_t ResetAP)
 {
-	WiFiManager wifiManager;
+	uint8_t validIP;
+  IPAddress MQTTeIP;
+  WiFiManager wifiManager;
+  WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
 	//wifiManager.setAPCallback(configModeCallback);
 	if (ResetAP){
 		wifiManager.resetSettings();
 		wifiManager.setHostname("BotArena");
+    wifiManager.addParameter(&TB_brokerIP);
 		wifiManager.autoConnect("BotConfigAP");
+    validIP = MQTTeIP.fromString(TB_brokerIP.getValue());
+    if (validIP)
+      MQTTIp = MQTTeIP;
 	}
 	else
 	{
-		//wifiManager.setHostname("MoxieBoard");
+    wifiManager.setHostname("BotArena");
+    wifiManager.addParameter(&TB_brokerIP);
 		wifiManager.autoConnect("BotConfigAP");
+    validIP = MQTTeIP.fromString(TB_brokerIP.getValue());
+    if (validIP)
+      MQTTIp = MQTTeIP;
 	}
 
 	// these are used for debug
@@ -654,11 +665,14 @@ void IOTsetup()
   // these lines set up the access point, mqtt & other internet stuff
   pinMode(G_LIGHT, OUTPUT);     // Initialize the Green for Wifi
   WiFiCP(Btnstate);
+  // comment this out so we can enter broker IP on setup
+  /*
   testIP = mDNShelper();
 	if (!testIP){
 		MQTTIp.fromString(TempIP);
 	}
 	Serial.print("IP address of server: ");
+  */
 	Serial.println(MQTTIp.toString());
 	MTQ.setServerIP(MQTTIp);
   digitalWrite(G_LIGHT, LOW); //turn off the light if on from config

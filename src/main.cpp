@@ -225,6 +225,7 @@ uint64_t gAddSecTimer; // for the "add sec" function
 uint8_t gMatchOverFlag; // Set for any state thats "game over"
 uint8_t MQstatcode; // for MQTT pubsub
 String Msgcontents;
+uint64_t ResetSec; // time to set clock to (only during pause)
 
 // button reading and state setting is done here
 void readBtns(MatchState &match, bool &Match_Reset)
@@ -240,7 +241,6 @@ void readBtns(MatchState &match, bool &Match_Reset)
       GameOver.update();
       GamePause.update();
       BtnCycle =GameReset.cycleCount();
-      //BtnCycle =GameReset.cycleCount();
       Match_Reset = false;
 
       if (GamePause.isCycled())
@@ -280,6 +280,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
           Start_A.update();
           Start_B.update();
           GameReset.update();
+          
           // this discards the reads on A, B and main start if not reset
           if (Match_Reset == false)
           {
@@ -497,7 +498,7 @@ String MstateSetMQTT(MatchState match, u_int8_t Match_Reset)
     break;
   case MatchState::sysint:
   {
-    Serial.println("System_startup");
+    // Serial.println("System_startup");
     S_temp = "system_startup";
   }
     break;
@@ -656,11 +657,11 @@ void IOTsetup()
   // Will wait 2 sec and check for reset to be held down / pressed
   while ((APmodeCKtimer + AP_DELAY) > millis())
   {
-    if(GameReset.down())
+    if(End_A.isCycled())
       Btnstate = 1;
-    GameReset.update();
+    End_A.update();
   }
-  tempint = GameReset.cycleCount();
+  tempint = End_A.cycleCount();
   String TempIP = MQTTIp.toString();
   // these lines set up the access point, mqtt & other internet stuff
   pinMode(G_LIGHT, OUTPUT);     // Initialize the Green for Wifi
@@ -718,6 +719,7 @@ void setup() {
   gHornSounded = 0;
   gMatchOverFlag = 0;
   MatchSecRemain = 0;
+  ResetSec = 0;
   gBLtimer = millis();
   gBLtimer_2 = millis();
   Btn_timer = millis();
@@ -927,7 +929,8 @@ void loop()
       //** debug code *****************************
       Serial.print("message is: ");
       Msgcontents = MTQ.GetMsg();
-      Serial.println(Msgcontents);
+      ResetSec = Msgcontents.toInt();
+      Serial.println(Msgcontents); 
       // ******************************************
       GotMail = false;
 	  }

@@ -5,6 +5,9 @@
 #include <Arduino.h>
 #include <PushButton.h>
 #include <MQTThandler.h>
+#include <FS.h>
+#include <SPIFFS.h>
+#include <ArduinoJson.h>
 #include <WiFi.h>
 #include <DNSServer.h>
 #include <WebServer.h>
@@ -63,6 +66,7 @@ byte debugMode = DEBUG_ON;
 #define ADD_TIME_DIVISOR 200
 
 #define AP_DELAY 2000
+#define CONFIG_FILE "/svr-config.json"
 
 //**** Wifi and MQTT stuff below *********************
 // Copied directly from the tested and working Moxie board project
@@ -79,6 +83,7 @@ uint64_t msgPeriod = 10000; //Message check interval in ms (10 sec for testing)
 
 String S_Stat_msg;
 String S_Match;
+String sBrokerIP;
 int value = 0;
 uint8_t GotMail;
 uint8_t statusCode;
@@ -88,6 +93,51 @@ MQTThandler MTQ(espClient, MQTTIp);
 const char* outTopic= "botcontrol";
 const char* inTopic= "timecontrol";
 
+// used to get JSON config
+uint8_t GetConfData(void)
+{
+  uint8_t retVal = 1;
+  if (SPIFFS.begin(false) || SPIFFS.begin(true))
+  {
+    if (SPIFFS.exists(CONFIG_FILE))
+    {
+      File CfgFile = SPIFFS.open(CONFIG_FILE, "r");
+      if(CfgFile.available())
+      {
+        StaticJsonDocument<512> jsn;
+        DeserializationError jsErr = deserializeJson(jsn, CfgFile);
+        serializeJsonPretty(jsn,Serial); // think this is just going to print to serial
+        if (!jsErr)
+        {
+          sBrokerIP = jsn["BrokerIP"].as<String>();
+          retVal = 0;
+        }
+      }
+    }
+    else
+      DBG("File_not_found");
+  }
+  return retVal;
+}
+
+// used to save config as JSON
+uint8_t SaveConfData(void)
+{
+  uint8_t retVal = 1;
+  StaticJsonDocument<512> jsn;
+  jsn["BrokerIP"] = sBrokerIP;
+  File CfgFile = SPIFFS.open(CONFIG_FILE, "w");
+  if (CfgFile)
+  {
+    if (serializeJson(jsn, CfgFile) != 0)
+      retVal = 0;
+    else
+      DBG("failed to write file");
+  }
+  CfgFile.close();
+  return retVal;
+}
+
 // Wifi captive portal setup on ESP8266
 void configModeCallback(WiFiManager *myWiFiManager) {
    Serial.println("Entered config mode");
@@ -96,12 +146,31 @@ void configModeCallback(WiFiManager *myWiFiManager) {
 	//if you used auto generated SSID, print it
 	Serial.println(myWiFiManager->getConfigPortalSSID());
 }
+void saveConfigCallback()
+{
+  uint8_t bFlag;
+  bFlag = SaveConfData();
+  if (bFlag)
+  {
+    DBG("Failed to Save");
+  }
+  else
+  {
+    DBG("saved");
+  }
+  // do nothing right now
+}
 
+// called to set up wifi
+// Still a WIP !!! Saving of Params is untested !!
 void WiFiCP(uint8_t ResetAP)
 {
 	uint8_t validIP;
+  uint8_t loadedFile;
+  uint8_t isConnected;
   IPAddress MQTTeIP;
   WiFiManager wifiManager;
+  wifiManager.setPreSaveConfigCallback(saveConfigCallback);
   WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
 	//wifiManager.setAPCallback(configModeCallback);
 	if (ResetAP){
@@ -117,10 +186,13 @@ void WiFiCP(uint8_t ResetAP)
 	{
     wifiManager.setHostname("BotArena");
     wifiManager.addParameter(&TB_brokerIP);
-		wifiManager.autoConnect("BotConfigAP");
-    validIP = MQTTeIP.fromString(TB_brokerIP.getValue());
-    if (validIP)
-      MQTTIp = MQTTeIP;
+		isConnected = wifiManager.autoConnect("BotConfigAP");
+    if (isConnected){
+      loadedFile = GetConfData();
+      validIP = MQTTeIP.fromString(sBrokerIP);
+      if (validIP)
+        MQTTIp = MQTTeIP;
+    } 
 	}
 
 	// these are used for debug
@@ -346,6 +418,8 @@ void readBtns(MatchState &match, bool &Match_Reset)
 
 // this is the function used to add time to the clock
 // can use pause / reset / game over to set time
+// Commenting this out to use the MQTT approch for now
+/*
 void SetTimer(MatchState l_match, uint64_t &lTimervalue, uint64_t &tempTimervalue, int &lSecAdd)
 {
   if (l_match == MatchState::paused)
@@ -389,6 +463,8 @@ void SetTimer(MatchState l_match, uint64_t &lTimervalue, uint64_t &tempTimervalu
     tempTimervalue= lTimervalue + (lSecAdd * 1000);
   }
 }
+*/
+
 // used to blink the light tower
 void blink(u_int8_t &state, uint64_t &lastBlink, u_int8_t ledGPIO)
 {
@@ -807,6 +883,17 @@ void loop()
     match_timer(g_match,gMatchStartTime,gMatchRunTime,isTimerRunning,g_Match_Reset);
     // count down timer display
     MatchSecRemain = MATCH_LEN - (gMatchRunTime / 1000);
+    if((g_match == MatchState::paused) && (ResetSec > 0))
+    {
+       // get this from a number sent in via MQTT
+       if(ResetSec < MATCH_LEN)
+       {
+          gMatchRunTime = (ResetSec - MATCH_LEN)*1000;
+          ResetSec = 0;
+       }
+    }
+    // Might bring this back
+    /*
     if((isTimerRunning == false) && (g_Match_Reset == false))
     {
       // allow time adjustment here
@@ -822,6 +909,7 @@ void loop()
         secToAdd = 0;
       }
     }
+    */
     Timer_timer = millis();
   }
 

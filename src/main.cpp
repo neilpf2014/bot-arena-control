@@ -22,7 +22,7 @@
 ** Match start / pause / end /reset for ref
 ** Serial out to hacked iCruze display boards
 ** Will control 2 "stoplight" towers with signal horns
-** NF 2022/06/04, updated 2023/01/01
+** NF 2022/06/04, updated 2023/01/13
 */
 
 // All #define's  at top of code to avoid issues
@@ -84,6 +84,7 @@ uint64_t msgPeriod = 10000; //Message check interval in ms (10 sec for testing)
 String S_Stat_msg;
 String S_Match;
 String sBrokerIP;
+uint8_t isIPvalid;
 int value = 0;
 uint8_t GotMail;
 uint8_t statusCode;
@@ -124,17 +125,28 @@ uint8_t GetConfData(void)
 uint8_t SaveConfData(void)
 {
   uint8_t retVal = 1;
-  StaticJsonDocument<512> jsn;
-  jsn["BrokerIP"] = sBrokerIP;
-  File CfgFile = SPIFFS.open(CONFIG_FILE, "w");
-  if (CfgFile)
+  //SPIFFS.format();
+  if (SPIFFS.begin(true))
   {
-    if (serializeJson(jsn, CfgFile) != 0)
-      retVal = 0;
-    else
-      DBG("failed to write file");
+    
+    StaticJsonDocument<512> jsn;
+    jsn["BrokerIP"] = sBrokerIP;
+    File CfgFile = SPIFFS.open(CONFIG_FILE, "w");
+    if (CfgFile)
+    {
+      if (serializeJson(jsn, CfgFile) != 0)
+        retVal = 0;
+      else
+        DBG("failed to write file");
+    }
+    CfgFile.close();
   }
-  CfgFile.close();
+  else
+  {
+    retVal = 1;
+    DBG("failed to open file");
+  }
+
   return retVal;
 }
 
@@ -180,7 +192,12 @@ void WiFiCP(uint8_t ResetAP)
 		wifiManager.autoConnect("BotConfigAP");
     validIP = MQTTeIP.fromString(TB_brokerIP.getValue());
     if (validIP)
+    {
       MQTTIp = MQTTeIP;
+      isIPvalid = 1;
+    }
+    else
+      isIPvalid = 0;
 	}
 	else
 	{
@@ -191,7 +208,12 @@ void WiFiCP(uint8_t ResetAP)
       loadedFile = GetConfData();
       validIP = MQTTeIP.fromString(sBrokerIP);
       if (validIP)
+      {
         MQTTIp = MQTTeIP;
+        isIPvalid = 1;
+      }
+      else
+        isIPvalid = 0;
     } 
 	}
 
@@ -1007,21 +1029,24 @@ void loop()
   // Deal with MQTT Pubsub
   if ((millis()-PubSub_timer) > PUBSUB_DELAY)
   {
-     // send / recieve status via MQTT
-    S_Match = MstateSetMQTT(g_match, g_Match_Reset);
-    // this should be sending cur mills,state_code,state string, match sec remain as the message
-    S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
-    MQstatcode = MTQ.publish(S_Stat_msg);
-    GotMail = MTQ.update();
-    if (GotMail == true){
-      //** debug code *****************************
-      Serial.print("message is: ");
-      Msgcontents = MTQ.GetMsg();
-      ResetSec = Msgcontents.toInt();
-      Serial.println(Msgcontents); 
-      // ******************************************
-      GotMail = false;
-	  }
+     if (isIPvalid)
+    {
+    // send / recieve status via MQTT
+      S_Match = MstateSetMQTT(g_match, g_Match_Reset);
+      // this should be sending cur mills,state_code,state string, match sec remain as the message
+      S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
+      MQstatcode = MTQ.publish(S_Stat_msg);
+      GotMail = MTQ.update();
+      if (GotMail == true){
+        //** debug code *****************************
+        //Serial.print("message is: ");
+        Msgcontents = MTQ.GetMsg();
+        ResetSec = Msgcontents.toInt();
+        //Serial.println(Msgcontents); 
+        // ******************************************
+        GotMail = false;
+      }
+    }
     PubSub_timer = millis();
   }
 }

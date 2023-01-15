@@ -73,7 +73,7 @@ byte debugMode = DEBUG_ON;
 // Update these with values suitable for the broker used.
 
 const char* svrName = "Wyse-5070-ubuntu02"; // if you have zeroconfig working
-IPAddress MQTTIp(192,168,1,140); // IP oF the MQTT broker if not
+IPAddress MQTTIp(192,168,1,183); // IP oF the MQTT broker if not 192.168.1.183
 
 WiFiClient espClient;
 uint64_t lastMsg = 0;
@@ -1029,7 +1029,7 @@ void loop()
   // Deal with MQTT Pubsub
   if ((millis()-PubSub_timer) > PUBSUB_DELAY)
   {
-     if (isIPvalid)
+    if (isIPvalid)
     {
     // send / recieve status via MQTT
       S_Match = MstateSetMQTT(g_match, g_Match_Reset);

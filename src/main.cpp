@@ -57,7 +57,7 @@ byte debugMode = DEBUG_ON;
 #define D_SER_TX 17
 #define D_SER_RX 16
 
-#define MATCH_LEN 180 // match len in sec ( 3 min)
+#define MATCH_LEN 150 // match len in sec ( 3 min)
 #define MATCH_END_WARN 15 // ending warn time sec
 #define BLINK_DELAY 500 // in ms
 #define STARTUP_DELAY 5000 //5 sec

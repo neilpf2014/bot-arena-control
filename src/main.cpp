@@ -73,7 +73,7 @@ byte debugMode = DEBUG_ON;
 // Update these with values suitable for the broker used.
 
 const char* svrName = "Wyse-5070-ubuntu02"; // if you have zeroconfig working
-IPAddress MQTTIp(192,168,1,183); // IP oF the MQTT broker if not 192.168.1.183
+IPAddress MQTTIp(192,168,1,140); // IP oF the MQTT broker if not 192.168.1.183
 
 WiFiClient espClient;
 uint64_t lastMsg = 0;
@@ -197,7 +197,9 @@ void WiFiCP(uint8_t ResetAP)
       isIPvalid = 1;
     }
     else
-      isIPvalid = 0;
+    // need to fix we are hitting this because save code not working
+      isIPvalid = 1;
+      DBG("invalid");
 	}
 	else
 	{
@@ -213,7 +215,9 @@ void WiFiCP(uint8_t ResetAP)
         isIPvalid = 1;
       }
       else
-        isIPvalid = 0;
+      // need to fix we are hitting this because save code not working
+        isIPvalid = 1;
+        DBG("invalid");
     } 
 	}
 
@@ -583,14 +587,13 @@ void setLights(MatchState &match, bool Match_Reset)
 }
 
 // was debug now setting Match string for MQTT
-String MstateSetMQTT(MatchState match, u_int8_t Match_Reset)
+String MstateSetMQTT(MatchState match, u_int8_t Match_Reset, u_int8_t printState)
 {
   String S_temp;
   switch (match)
   {
   case MatchState::all_ready:
   {
-    Serial.println("All ready");
     S_temp = "all_ready";
   }
     break;
@@ -602,72 +605,68 @@ String MstateSetMQTT(MatchState match, u_int8_t Match_Reset)
     break;
   case MatchState::team_a_ready:
   {
-    Serial.println("team_a_ready");
     S_temp = "team_a_ready";
   }
     break;
   case MatchState::team_b_ready:
   {
-    Serial.println("team_b_ready");
     S_temp = "team_b_ready";
   }
     break;
   case MatchState::starting:
   {
-    Serial.println("starting");
     S_temp = "starting";
   }
     break;
   case MatchState::ending:
   {
-    Serial.println("ending");
     S_temp = "ending";
   }
     break;
   case MatchState::unpaused:
   {
-    Serial.println("unpaused");
     S_temp = "unpaused";
   }
     break;
   case MatchState::paused:
   {
-    Serial.println("paused");
     S_temp = "paused";
   }   
     break;
   case MatchState::team_a_tap:
   {
-    Serial.println("team_a_tap");
     S_temp = "team_a_tap";
   }  
     break;
   case MatchState::team_b_tap:
   {
-    Serial.println("team_b_tap");
     S_temp = "team_b_tap";
   }
     break;
   case MatchState::in_progress:
   {
-    Serial.println("Match Running");
     S_temp = "Match Running";
   }
     break;
   case MatchState::time_up:
   {
-    Serial.println("time_up");
     S_temp = "time_up";
   }
     break;
   case MatchState::ko_end:
   {
-    Serial.println("ko_end");
     S_temp = "ko_end";
   }
   default:
     break;
   }
+  if ((match == MatchState::ko_end)||(match == MatchState::team_a_tap)||(match == MatchState::team_b_tap)||(match == MatchState::time_up)||(match == MatchState::sysint))
+  {
+    if (Match_Reset > 0)
+      S_temp = "reset_ready";
+  }
+  if (printState > 0)
+    Serial.println(S_temp);
   return S_temp;
 }
 
@@ -772,6 +771,7 @@ void IOTsetup()
 	}
 	Serial.print("IP address of server: ");
   */
+  Serial.print("IP address of broker: ");
 	Serial.println(MQTTIp.toString());
 	MTQ.setServerIP(MQTTIp);
   digitalWrite(G_LIGHT, LOW); //turn off the light if on from config
@@ -782,9 +782,14 @@ void setup() {
   
   Serial.begin(115200);
   IOTsetup();
+  /*
+  Remove the iCruze from the system
   // give the iCruze attiny time to boot
   delay(500);
   Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
+  Serial1.println("---Display Test----");
+  Serial1.println("---Line 2----");
+  */
   pinMode(R_LIGHT,OUTPUT);
   pinMode(R_LIGHT_2,OUTPUT);
   pinMode (Y_LIGHT,OUTPUT);
@@ -823,10 +828,9 @@ void setup() {
   Btn_timer = millis();
   PubSub_timer = millis();
   g_match = MatchState::sysint;
-  debug_lastmatch = MatchState::time_up;
+  debug_lastmatch = MatchState::sysint;
   S_Match = "init";
-  Serial1.println("---Display Test----");
-  Serial1.println("---Line 2----");
+  
 }
 
 // Main Loop
@@ -861,9 +865,10 @@ void loop()
   if ((millis()-light_timer) > MAIN_LOOP_DELAY + 1)
   {
     setLights(g_match, g_Match_Reset);
+    // this ensures that we get the echo debug to the console if MQTT fails
     if(debug_lastmatch != g_match)
     {
-      MstateSetMQTT(g_match, g_Match_Reset);
+      S_Match = MstateSetMQTT(g_match, g_Match_Reset, 1);
       debug_lastmatch = g_match;
     }
     light_timer = millis();
@@ -910,31 +915,14 @@ void loop()
        // get this from a number sent in via MQTT
        if(ResetSec < MATCH_LEN)
        {
-          gMatchRunTime = (ResetSec - MATCH_LEN)*1000;
+          gMatchRunTime = (MATCH_LEN - ResetSec) *1000;
           ResetSec = 0;
        }
     }
-    // Might bring this back
-    /*
-    if((isTimerRunning == false) && (g_Match_Reset == false))
-    {
-      // allow time adjustment here
-      if ((gTempRunTime > 5000) && (gTempRunTime < ((MATCH_LEN-10)*1000)))
-        SetTimer(g_match, gMatchRunTime, gTempRunTime, secToAdd);
-    }
-    else
-    {
-      if((isTimerRunning)&&(gTempRunTime > 0))
-      {
-        // gMatchRunTime = gTempRunTime;
-        gTempRunTime = 0;
-        secToAdd = 0;
-      }
-    }
-    */
     Timer_timer = millis();
   }
-
+  /*
+  ************ will comment this out to use MQTT based display
   // update char display
   // will send info out via serial
 
@@ -1025,22 +1013,23 @@ void loop()
     }	
     Display_timer = millis();
   }
-
+  */
   // Deal with MQTT Pubsub
   if ((millis()-PubSub_timer) > PUBSUB_DELAY)
   {
     if (isIPvalid)
     {
     // send / recieve status via MQTT
-      S_Match = MstateSetMQTT(g_match, g_Match_Reset);
+      S_Match = MstateSetMQTT(g_match, g_Match_Reset, 0);
       // this should be sending cur mills,state_code,state string, match sec remain as the message
       S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
       MQstatcode = MTQ.publish(S_Stat_msg);
       GotMail = MTQ.update();
       if (GotMail == true){
         //** debug code *****************************
-        //Serial.print("message is: ");
+        Serial.print("message is: ");
         Msgcontents = MTQ.GetMsg();
+        Serial.println(Msgcontents);
         ResetSec = Msgcontents.toInt();
         //Serial.println(Msgcontents); 
         // ******************************************

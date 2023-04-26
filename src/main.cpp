@@ -95,7 +95,7 @@ uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
 const char* outTopic= "botcontrol";
 const char* inTopic= "timecontrol";
-char CMD;
+
 
 // used to get JSON config
 uint8_t GetConfData(void)
@@ -229,7 +229,7 @@ void WiFiCP(uint8_t ResetAP)
 	Serial.println(WiFi.localIP());
 	// **************************
 	GotMail = false;
-	MTQ.setClientJName("ESP32Client");
+	MTQ.setClientName("ESP32Client");
 	MTQ.subscribeIncomming(inTopic);
 	MTQ.subscribeOutgoing(outTopic);
 }
@@ -326,6 +326,7 @@ uint64_t gAddSecTimer; // for the "add sec" function
 uint8_t gMatchOverFlag; // Set for any state thats "game over"
 uint8_t MQstatcode; // for MQTT pubsub
 String Msgcontents;
+
 uint64_t ResetSec; // time to set clock to (only during pause)
 
 // button reading and state setting is done here
@@ -342,8 +343,8 @@ void readBtns(MatchState &match, bool &Match_Reset)
       GameOver.update();
       // Start is used for pause -- change for new electronics
       GameStart.update();
-      GamePause.update();
-      BtnCycle =GameReset.cycleCount();
+      //GamePause.update();
+      //BtnCycle =GameReset.cycleCount();
       Match_Reset = false;
 /*
       if (GamePause.isCycled())
@@ -389,7 +390,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
           GameStart.update();
           Start_A.update();
           Start_B.update();
-          GameReset.update();
+          // GameReset.update();
           
           // this discards the reads on A, B and main start if not reset
           if (Match_Reset == false)
@@ -398,11 +399,14 @@ void readBtns(MatchState &match, bool &Match_Reset)
             BtnCycle = Start_B.cycleCount();
             BtnCycle = GameStart.cycleCount();
           }
+
+          /*
           if (GameReset.isCycled())
           {
             Match_Reset = true;
             BtnCycle =GameReset.cycleCount();
           }
+          */
 
           // check to see if both teams are ready
           if ((Start_A.isCycled())&&(Start_B.isCycled()))
@@ -426,7 +430,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
           if ((GameStart.isCycled()) && (match == MatchState::all_ready))
           {
             BtnCycle = GameStart.cycleCount();
-            BtnCycle = GameReset.cycleCount();
+            //BtnCycle = GameReset.cycleCount();
             match = MatchState::starting;
           }
         }
@@ -434,7 +438,6 @@ void readBtns(MatchState &match, bool &Match_Reset)
     // match paused
       else
       {
-        //note update is called to use reset, pause and end button to adjust time on clock
 				if(match == MatchState::paused)
         {
           GameStart.update();
@@ -454,54 +457,35 @@ void readBtns(MatchState &match, bool &Match_Reset)
     }
 }
 
-// this is the function used to add time to the clock
-// can use pause / reset / game over to set time
-// Commenting this out to use the MQTT approch for now
-/*
-void SetTimer(MatchState l_match, uint64_t &lTimervalue, uint64_t &tempTimervalue, int &lSecAdd)
+// new to handle msg from MQTT
+void MQTThandleIncoming(String Msg, uint64_t &addTime ,bool &Match_Reset, MatchState &_match)
 {
-  if (l_match == MatchState::paused)
+
+  char CMD;
+  String sResetSecs;
+  
+  CMD = Msgcontents.charAt(1);
+  if (Msgcontents.length() > 1 )
   {
-    uint8_t tempCycCount = 0;
-    int tempToAdd;
-    int minSec = (tempTimervalue / 1000) + 1;
-  // use pause to add time
-    if(GameOver.down())
-    {
-      if((GamePause.isCycled())||(GamePause.down())&&((lSecAdd+minSec) < (MATCH_LEN-2)))
+          // parse the input will be 1 letter and an integer
+          // 'R' for reset
+          // 'A' for add time
+      if(CMD=='A')
       {
-        if(GamePause.isCycled())
-        {
-          tempCycCount = GamePause.cycleCount();
-          lSecAdd = lSecAdd + tempCycCount;
-        }
-        if(GamePause.down())
-        {
-          tempToAdd = GamePause.getLongPressMS();
-          if (tempToAdd > 0)
-            lSecAdd = lSecAdd + (tempToAdd / ADD_TIME_DIVISOR); // add 5 sec for each 1 sec of BTN press
-        }
+        sResetSecs = Msgcontents.substring(2,Msgcontents.length());
+        ResetSec = Msgcontents.toInt();
       }
-      // use reset to remove time
-      if(((GameReset.isCycled())||(GameReset.down()))&&((lSecAdd+minSec) > 0))
-      {
-        if(GameReset.isCycled())
-        {
-          tempCycCount = GamePause.cycleCount();
-          lSecAdd = lSecAdd - tempCycCount;
-        }
-        if(GameReset.down())
-          {
-            tempToAdd = GameReset.getLongPressMS();
-            if (tempToAdd > 0)
-              lSecAdd = lSecAdd - (tempToAdd / ADD_TIME_DIVISOR); // add 5 sec for each 1 sec of BTN press
-          }
-      }
-    }
-    tempTimervalue= lTimervalue + (lSecAdd * 1000);
   }
+  else
+  {
+      if((_match != MatchState::starting)&&(_match != MatchState::paused)&&(_match != MatchState::unpaused))
+      {
+        if(CMD=='R')
+          Match_Reset = true;
+      }       
+  }
+
 }
-*/
 
 // used to blink the light tower
 void blink(u_int8_t &state, uint64_t &lastBlink, u_int8_t ledGPIO)
@@ -688,7 +672,7 @@ void soundHorn(u_int8_t &hornOn, uint64_t &hornTime, u_int32_t tootLen, u_int8_t
 {
   // horn is on when true, horn time stores start of sound
   if(hornOn == 1)
-  {26
+  {
     hornTime = millis();
     hornOn = 2;
   }
@@ -794,14 +778,7 @@ void setup() {
   
   Serial.begin(115200);
   IOTsetup();
-  /*
-  Remove the iCruze from the system
-  // give the iCruze attiny time to boot
-  delay(500);
-  Serial1.begin(9600,SERIAL_8N1,D_SER_RX,D_SER_TX);
-  Serial1.println("---Display Test----");
-  Serial1.println("---Line 2----");
-  */
+  
   pinMode(R_LIGHT,OUTPUT);
   pinMode(R_LIGHT_2,OUTPUT);
   pinMode (Y_LIGHT,OUTPUT);
@@ -933,99 +910,7 @@ void loop()
     }
     Timer_timer = millis();
   }
-  /*
-  ************ will comment this out to use MQTT based display
-  // update char display
-  // will send info out via serial
-
-  if ((millis()-Display_timer) > DIS_DELAY)
-  {
-    // using the 2 x 20 line iCruze display
-    // refresh display every 200 ms 
-    // display time remaining in min : sec on first line
-    // status display on second
-    Dis_min = MatchSecRemain / 60;
-    Dis_sec = MatchSecRemain % 60;
-    if((g_match == MatchState::in_progress)||(g_match == MatchState::ending))
-    {
-      Serial1.print(Dis_min);
-      Serial1.print(":");
-      Serial1.printf("%02d",Dis_sec);
-      Serial1.println(" Remaining");
-      if(g_match == MatchState::in_progress)
-        Serial1.println("Match in Progress");
-      else
-        Serial1.println("Match ending");
-    }
-    else
-    {
-      if(g_match == MatchState::starting)
-      {
-        Serial1.print("Starting in: ");
-        Serial1.printf("%02d",(CountDownMSec/1000));
-        Serial1.println();
-        Serial1.println("ALL READY-Starting");
-      }
-			else
-			{
-			// this should fix some of the flashing display issues
-			// Won't update display unless stuff has changed	
-				if(g_match != last_match_state)
-				{
-					if(g_match == MatchState::paused)
-					{
-						Serial1.print(Dis_min);
-						Serial1.print(":");
-						Serial1.printf("%02d",Dis_sec);
-						Serial1.println(" Remaining");
-						Serial1.println("--Paused --");
-					}
-					if(g_match == MatchState::time_up)
-					{
-						Serial1.println("--- Time's Up ---");
-						Serial1.println("-- MATCH OVER ---");
-					}
-					if(g_match == MatchState::team_a_tap)
-					{
-						Serial1.print(Dis_min);
-						Serial1.print(":");
-						Serial1.printf("%02d",Dis_sec);
-						Serial1.println(" -MATCH OVER-");
-						Serial1.println("--TEAM A TAPOUT--");
-					}
-					if(g_match == MatchState::team_b_tap)
-					{
-						Serial1.print(Dis_min);
-						Serial1.print(":");
-						Serial1.printf("%02d",Dis_sec);
-						Serial1.println(" -MATCH OVER-");
-						Serial1.println("--TEAM B TAPOUT--");
-					}
-					if(g_match == MatchState::ko_end)
-					{
-						Serial1.print(Dis_min);
-						Serial1.print(":");
-						Serial1.printf("%02d",Dis_sec);
-						Serial1.println(" -MATCH OVER-");
-						Serial1.println("-- BY KNOCKOUT --");
-					}
-					if(g_match == MatchState::all_ready)
-					{
-						Serial1.println("-- 3 min clock ---");
-						Serial1.println("--- ALL READY ---");
-					}
-					if((g_match != MatchState::all_ready)&&(g_Match_Reset == true)&&(g_match != MatchState::starting))
-					{
-						Serial1.println("-- WAITING FOR ---");
-						Serial1.println("----- READY -----");
-					}
-					last_match_state = g_match;
-				}
-			}
-    }	
-    Display_timer = millis();
-  }
-  */
+  
   // Deal with MQTT Pubsub
   if ((millis()-PubSub_timer) > PUBSUB_DELAY)
   {
@@ -1042,20 +927,7 @@ void loop()
         Serial.print("message is: ");
         Msgcontents = MTQ.GetMsg();
         Serial.println(Msgcontents);
-        if (Msgcontents.length() > 1 )
-        {
-          CMD = Msgcontents.charAt(1);
-          // parse the input will be 1 letter and an integer
-          // 'R' for reset
-          // 'A' for add time
-          // ResetSec = Msgcontents.toInt();
-
-        }
-        // parse the input will be 1 letter and an integer
-        // 'R' for reset
-        // 'A' for add time
-        // ResetSec = Msgcontents.toInt();
-        // Serial.println(Msgcontents); 
+        
         //********************************************
         GotMail = false;
       }

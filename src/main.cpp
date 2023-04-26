@@ -1,5 +1,6 @@
 /*
 **  Dev to use Mqtt to send the match status to the stream or other consuming application
+**  changes for new areana 4-25-2023 electronics **** 
 */
 
 #include <Arduino.h>
@@ -35,14 +36,15 @@ byte debugMode = DEBUG_ON;
 // #define DEBUG
 
 // button GPIO's ESP32 / Change for STM32
-#define TEAM_A_START 23
-#define TEAM_A_END 22
-#define TEAM_B_START 33
-#define TEAM_B_END 32
-#define MATCH_START 25
-#define MATCH_PAUSE 26
-#define MATCH_END 27
-#define MATCH_RESET 14
+// changed for new control
+#define TEAM_A_START 25
+#define TEAM_A_END 26
+#define TEAM_B_START 12
+#define TEAM_B_END 22
+#define MATCH_START 14
+#define MATCH_PAUSE 34
+#define MATCH_END 17
+#define MATCH_RESET 33
 // tower signal light GPIO's
 #define R_LIGHT 5
 #define R_LIGHT_2 4
@@ -93,6 +95,7 @@ uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
 const char* outTopic= "botcontrol";
 const char* inTopic= "timecontrol";
+char CMD;
 
 // used to get JSON config
 uint8_t GetConfData(void)
@@ -226,7 +229,7 @@ void WiFiCP(uint8_t ResetAP)
 	Serial.println(WiFi.localIP());
 	// **************************
 	GotMail = false;
-	MTQ.setClientName("ESP32Client");
+	MTQ.setClientJName("ESP32Client");
 	MTQ.subscribeIncomming(inTopic);
 	MTQ.subscribeOutgoing(outTopic);
 }
@@ -277,15 +280,15 @@ uint8_t SendNewMessage(String MessOut){
     10 sec count down (blinking green)
   Horn will sound at match end, time up or team tapout
 */
-
-PushButton Start_A(TEAM_A_START);
-PushButton End_A(TEAM_A_END);
-PushButton Start_B(TEAM_B_START);
-PushButton End_B(TEAM_B_END);
-PushButton GameStart(MATCH_START);
-PushButton GameOver(MATCH_END);
-PushButton GamePause(MATCH_PAUSE);
-PushButton GameReset(MATCH_RESET);
+ //  set for pull up inputs
+PushButton Start_A(TEAM_A_START, 1);
+PushButton End_A(TEAM_A_END, 1);
+PushButton Start_B(TEAM_B_START, 1);
+PushButton End_B(TEAM_B_END, 1);
+PushButton GameStart(MATCH_START, 1);
+PushButton GameOver(MATCH_END, 1);
+PushButton GamePause(MATCH_PAUSE, 1);
+PushButton GameReset(MATCH_RESET, 1);
 
 // timer var for stuff
 uint64_t Btn_timer;
@@ -337,15 +340,18 @@ void readBtns(MatchState &match, bool &Match_Reset)
       End_A.update();
       End_B.update();
       GameOver.update();
+      // Start is used for pause -- change for new electronics
+      GameStart.update();
       GamePause.update();
       BtnCycle =GameReset.cycleCount();
       Match_Reset = false;
-
+/*
       if (GamePause.isCycled())
       {
         BtnCycle = GamePause.cycleCount();
         match = MatchState::paused;
       }
+*/
       // team tap out
       if ((End_A.isCycled() || End_B.isCycled()) && (match == MatchState::in_progress))
       {
@@ -364,6 +370,12 @@ void readBtns(MatchState &match, bool &Match_Reset)
       {
         BtnCycle = GameOver.cycleCount();
         match = MatchState::ko_end;
+      }
+      // start is used for pause if match is running -- Change for new electronics
+      if(GameStart.isCycled() && (match == MatchState::in_progress)) 
+      {
+        BtnCycle = GameStart.cycleCount();
+        match = MatchState::paused;
       }
     }
     else
@@ -676,7 +688,7 @@ void soundHorn(u_int8_t &hornOn, uint64_t &hornTime, u_int32_t tootLen, u_int8_t
 {
   // horn is on when true, horn time stores start of sound
   if(hornOn == 1)
-  {
+  {26
     hornTime = millis();
     hornOn = 2;
   }
@@ -1026,13 +1038,25 @@ void loop()
       MQstatcode = MTQ.publish(S_Stat_msg);
       GotMail = MTQ.update();
       if (GotMail == true){
-        //** debug code *****************************
+        //*** debug code *****************************
         Serial.print("message is: ");
         Msgcontents = MTQ.GetMsg();
         Serial.println(Msgcontents);
-        ResetSec = Msgcontents.toInt();
-        //Serial.println(Msgcontents); 
-        // ******************************************
+        if (Msgcontents.length() > 1 )
+        {
+          CMD = Msgcontents.charAt(1);
+          // parse the input will be 1 letter and an integer
+          // 'R' for reset
+          // 'A' for add time
+          // ResetSec = Msgcontents.toInt();
+
+        }
+        // parse the input will be 1 letter and an integer
+        // 'R' for reset
+        // 'A' for add time
+        // ResetSec = Msgcontents.toInt();
+        // Serial.println(Msgcontents); 
+        //********************************************
         GotMail = false;
       }
     }

@@ -441,16 +441,16 @@ void readBtns(MatchState &match, bool &Match_Reset)
 				if(match == MatchState::paused)
         {
           GameStart.update();
-          GamePause.update();
-          GameReset.update();
+          //GamePause.update();
+          //GameReset.update();
           GameOver.update();
           if(GameStart.isCycled())
           {
             match = MatchState::unpaused;
             BtnCycle = GameStart.cycleCount();
             BtnCycle = GameOver.cycleCount();
-            BtnCycle = GamePause.cycleCount();
-            BtnCycle = GameReset.cycleCount();
+            //BtnCycle = GamePause.cycleCount();
+            //BtnCycle = GameReset.cycleCount();
           }
         }
       }
@@ -927,7 +927,7 @@ void loop()
         Serial.print("message is: ");
         Msgcontents = MTQ.GetMsg();
         Serial.println(Msgcontents);
-        
+        MQTThandleIncoming(Msgcontents, ResetSec, g_Match_Reset,g_match);
         //********************************************
         GotMail = false;
       }

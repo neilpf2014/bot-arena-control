@@ -17,13 +17,13 @@
 
 /*
 ** Robot Combat Arena Control Code
-** Using Ardunio framework / ESP32 (maybe STM32 with GPIO changes)
+** Using Ardunio framework / ESP32
 ** Read 8 buttons
 ** ready and tap out for 2 teams
 ** Match start / pause / end /reset for ref
-** Serial out to hacked iCruze display boards
+** With MQTT code for stream overlay integration
 ** Will control 2 "stoplight" towers with signal horns
-** NF 2022/06/04, updated 2023/01/13
+** NF 2022/06/04, updated for new electronics 2023/04/25
 */
 
 // All #define's  at top of code to avoid issues

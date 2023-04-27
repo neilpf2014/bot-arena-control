@@ -37,14 +37,14 @@ byte debugMode = DEBUG_ON;
 
 // button GPIO's ESP32 / Change for STM32
 // changed for new control
-#define TEAM_A_START 25
-#define TEAM_A_END 26
-#define TEAM_B_START 12
-#define TEAM_B_END 22
-#define MATCH_START 14
-#define MATCH_PAUSE 34
-#define MATCH_END 17
-#define MATCH_RESET 33
+#define TEAM_A_START 25   // old GPIO 23 New GPIO 25
+#define TEAM_A_END 26     // old GPIO 22 New GPIO 26
+#define TEAM_B_START 12   // old GPIO 33 New GPIO 12
+#define TEAM_B_END 22     // old GPIO 32 New GPIO 22
+#define MATCH_START 14    // old GPIO 25 New GPIO 14
+#define MATCH_PAUSE 34    // old GPIO 26 New GPIO not used
+#define MATCH_END 17      // old GPIO 27 New GPIO 17
+#define MATCH_RESET 33    // old GPIO 14 New GPIO not used
 // tower signal light GPIO's
 #define R_LIGHT 5
 #define R_LIGHT_2 4
@@ -90,6 +90,7 @@ uint8_t isIPvalid;
 int value = 0;
 uint8_t GotMail;
 uint8_t statusCode;
+bool SaveConf_flag = false;
 
 uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
@@ -163,22 +164,45 @@ void configModeCallback(WiFiManager *myWiFiManager) {
 }
 void saveConfigCallback()
 {
-  uint8_t bFlag;
-  bFlag = SaveConfData();
-  if (bFlag)
-  {
-    DBG("Failed to Save");
-  }
-  else
-  {
-    DBG("saved");
-  }
+  // Set save config flag
+  SaveConf_flag = true;
   // do nothing right now
 }
-
+void WiFiCP(void)
+{
+  uint8_t validIP;
+  uint8_t loadedFile;
+  uint8_t isConnected;
+  String sIPaddr;
+  IPAddress MQTTeIP;
+  WiFiManager wifiManager;
+  wifiManager.setPreSaveConfigCallback(saveConfigCallback);
+  WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
+	//wifiManager.setAPCallback(configModeCallback);
+	wifiManager.setHostname("BotArena");
+  wifiManager.addParameter(&TB_brokerIP);
+	isConnected = wifiManager.autoConnect("BotConfigAP");
+  if (isConnected){
+    sIPaddr = TB_brokerIP.getValue();
+    loadedFile = GetConfData();
+    if ((loadedFile == 0) && (!sBrokerIP.isEmpty()))
+    {
+      validIP = MQTTeIP.fromString(sIPaddr);
+      if (validIP)
+      {
+        if (!sBrokerIP.equals(sIPaddr))
+        {
+          // set IP from text box input
+          MQTTeIP.fromString(sIPaddr);
+        }
+      }
+      
+    }
+  }   
+}
 // called to set up wifi
 // Still a WIP !!! Saving of Params is untested !!
-void WiFiCP(uint8_t ResetAP)
+void WiFiCP2(uint8_t ResetAP)
 {
 	uint8_t validIP;
   uint8_t loadedFile;
@@ -192,17 +216,22 @@ void WiFiCP(uint8_t ResetAP)
 		wifiManager.resetSettings();
 		wifiManager.setHostname("BotArena");
     wifiManager.addParameter(&TB_brokerIP);
-		wifiManager.autoConnect("BotConfigAP");
-    validIP = MQTTeIP.fromString(TB_brokerIP.getValue());
-    if (validIP)
-    {
-      MQTTIp = MQTTeIP;
-      isIPvalid = 1;
-    }
-    else
-    // need to fix we are hitting this because save code not working
-      isIPvalid = 1;
-      DBG("invalid");
+		isConnected = wifiManager.autoConnect("BotConfigAP");
+    if (isConnected){
+      validIP = MQTTeIP.fromString(TB_brokerIP.getValue());
+      if (validIP)
+        {
+          loadedFile = GetConfData();
+          MQTTIp = MQTTeIP;
+          isIPvalid = 1;
+        }
+        else
+        // need to fix we are hitting this because save code not working
+        {
+          isIPvalid = 1;
+          DBG("invalid");
+        }
+    }   
 	}
 	else
 	{
@@ -758,7 +787,7 @@ void IOTsetup()
   String TempIP = MQTTIp.toString();
   // these lines set up the access point, mqtt & other internet stuff
   pinMode(G_LIGHT, OUTPUT);     // Initialize the Green for Wifi
-  WiFiCP(Btnstate);
+  WiFiCP2(Btnstate);
   // comment this out so we can enter broker IP on setup
   /*
   testIP = mDNShelper();

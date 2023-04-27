@@ -18,7 +18,7 @@
 /*
 ** Robot Combat Arena Control Code
 ** Using Ardunio framework / ESP32
-** Read 8 buttons
+** Read 8 buttons (6 now)
 ** ready and tap out for 2 teams
 ** Match start / pause / end /reset for ref
 ** With MQTT code for stream overlay integration
@@ -35,7 +35,7 @@ byte debugMode = DEBUG_ON;
 #define DBG(...) debugMode == DEBUG_ON ? Serial.println(__VA_ARGS__) : NULL
 // #define DEBUG
 
-// button GPIO's ESP32 / Change for STM32
+// ************* Button GPIO's ESP32 / Change for STM32 **********************************
 // changed for new control
 #define TEAM_A_START 25   // old GPIO 23 New GPIO 25
 #define TEAM_A_END 26     // old GPIO 22 New GPIO 26
@@ -70,9 +70,10 @@ byte debugMode = DEBUG_ON;
 #define AP_DELAY 2000
 #define CONFIG_FILE "/svr-config.json"
 
-//**** Wifi and MQTT stuff below *********************
-// Copied directly from the tested and working Moxie board project
-// Update these with values suitable for the broker used.
+//********** Wifi and MQTT stuff below ******************************************************
+//******* based on Moxie board project  *****************************************************
+//** Update these with values suitable for the broker used. *********************************
+//** should now cave param's entered in the CP screen
 
 const char* svrName = "Wyse-5070-ubuntu02"; // if you have zeroconfig working
 IPAddress MQTTIp(192,168,1,140); // IP oF the MQTT broker if not 192.168.1.183
@@ -168,20 +169,22 @@ void saveConfigCallback()
   SaveConf_flag = true;
   // do nothing right now
 }
-void WiFiCP(void)
+void WiFiCP(WiFiManager &WFM)
 {
   uint8_t validIP;
   uint8_t loadedFile;
+  uint8_t savedFile;
   uint8_t isConnected;
+  bool replaceDef = false;
   String sIPaddr;
   IPAddress MQTTeIP;
-  WiFiManager wifiManager;
-  wifiManager.setPreSaveConfigCallback(saveConfigCallback);
+  
+  WFM.setPreSaveConfigCallback(saveConfigCallback);
   WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
 	//wifiManager.setAPCallback(configModeCallback);
-	wifiManager.setHostname("BotArena");
-  wifiManager.addParameter(&TB_brokerIP);
-	isConnected = wifiManager.autoConnect("BotConfigAP");
+	WFM.setHostname("BotArena");
+  WFM.addParameter(&TB_brokerIP);
+	isConnected = WFM.autoConnect("BotConfigAP");
   if (isConnected){
     sIPaddr = TB_brokerIP.getValue();
     loadedFile = GetConfData();
@@ -194,14 +197,59 @@ void WiFiCP(void)
         {
           // set IP from text box input
           MQTTeIP.fromString(sIPaddr);
+          replaceDef = true;
+          if (SaveConf_flag == true)
+            SaveConf_flag = SaveConfData();
         }
       }
-      
     }
-  }   
+    else
+    {
+      if(!sBrokerIP.isEmpty())
+      {
+        validIP = MQTTeIP.fromString(sIPaddr);
+        if (validIP)
+        {
+          MQTTeIP.fromString(sIPaddr);
+          replaceDef = true;
+          if (SaveConf_flag == true)
+            SaveConf_flag = SaveConfData();
+        }
+      }
+    }
+    if (replaceDef)
+    {
+      MQTTIp = MQTTeIP;
+      DBG("replaced default");
+    }
+  } 
 }
+
 // called to set up wifi
 // Still a WIP !!! Saving of Params is untested !!
+void WiFiConf(uint8_t ResetAP)
+{
+  WiFiManager wifiManager;
+	//wifiManager.setAPCallback(configModeCallback);
+	if (ResetAP){
+		wifiManager.resetSettings();
+    WiFiCP(wifiManager); 
+	}
+  else
+    WiFiCP(wifiManager);
+  // these are used for debug
+	Serial.println("Print IP:");
+	Serial.println(WiFi.localIP());
+	// **************************
+	GotMail = false;
+	MTQ.setClientName("ESP32Client");
+	MTQ.subscribeIncomming(inTopic);
+	MTQ.subscribeOutgoing(outTopic);
+}
+
+// called to set up wifi
+// Still a WIP !!! Saving of Params is untested !!
+/*
 void WiFiCP2(uint8_t ResetAP)
 {
 	uint8_t validIP;
@@ -252,7 +300,6 @@ void WiFiCP2(uint8_t ResetAP)
         DBG("invalid");
     } 
 	}
-
 	// these are used for debug
 	Serial.println("Print IP:");
 	Serial.println(WiFi.localIP());
@@ -262,6 +309,7 @@ void WiFiCP2(uint8_t ResetAP)
 	MTQ.subscribeIncomming(inTopic);
 	MTQ.subscribeOutgoing(outTopic);
 }
+*/
 
 // use to get ip from mDNS, return true if sucess
 uint8_t mDNShelper(void){
@@ -285,14 +333,12 @@ uint8_t mDNShelper(void){
 	  	logflag = false;
 	  return logflag;
 }
-// send CSV line via MQTT -- this isn't called by anything
-uint8_t SendNewMessage(String MessOut){
-  uint8_t statusCode;
-	statusCode = MTQ.publish(MessOut);
-  return statusCode;
-}
+// **********************************************************************************************
+// ****************** End Wifi Config code ******************************************************
 
-// State diagram for Arena control ********
+
+
+// ********************* State diagram for Arena control ***************************************
 /* no match states:
     Reset and ready for start ( solid yellow )
       team a ready
@@ -309,7 +355,8 @@ uint8_t SendNewMessage(String MessOut){
     10 sec count down (blinking green)
   Horn will sound at match end, time up or team tapout
 */
- //  set for pull up inputs
+// ***********************************************************************************************
+//  set for pull up inputs
 PushButton Start_A(TEAM_A_START, 1);
 PushButton End_A(TEAM_A_END, 1);
 PushButton Start_B(TEAM_B_START, 1);
@@ -787,7 +834,7 @@ void IOTsetup()
   String TempIP = MQTTIp.toString();
   // these lines set up the access point, mqtt & other internet stuff
   pinMode(G_LIGHT, OUTPUT);     // Initialize the Green for Wifi
-  WiFiCP2(Btnstate);
+  WiFiConf(Btnstate);
   // comment this out so we can enter broker IP on setup
   /*
   testIP = mDNShelper();

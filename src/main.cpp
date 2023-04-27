@@ -37,14 +37,14 @@ byte debugMode = DEBUG_ON;
 
 // ************* Button GPIO's ESP32 / Change for STM32 **********************************
 // changed for new control
-#define TEAM_A_START 25   // old GPIO 23 New GPIO 25
-#define TEAM_A_END 26     // old GPIO 22 New GPIO 26
-#define TEAM_B_START 12   // old GPIO 33 New GPIO 12
-#define TEAM_B_END 22     // old GPIO 32 New GPIO 22
-#define MATCH_START 14    // old GPIO 25 New GPIO 14
-#define MATCH_PAUSE 34    // old GPIO 26 New GPIO not used
-#define MATCH_END 17      // old GPIO 27 New GPIO 17
-#define MATCH_RESET 33    // old GPIO 14 New GPIO not used
+#define TEAM_A_START 23   // old GPIO 23 New GPIO 25
+#define TEAM_A_END 22     // old GPIO 22 New GPIO 26
+#define TEAM_B_START 33   // old GPIO 33 New GPIO 12
+#define TEAM_B_END 32     // old GPIO 32 New GPIO 22
+#define MATCH_START 23    // old GPIO 25 New GPIO 14
+#define MATCH_PAUSE 26    // old GPIO 26 New GPIO not used
+#define MATCH_END 27      // old GPIO 27 New GPIO 17
+#define MATCH_RESET 14    // old GPIO 14 New GPIO not used
 // tower signal light GPIO's
 #define R_LIGHT 5
 #define R_LIGHT_2 4
@@ -179,17 +179,20 @@ void WiFiCP(WiFiManager &WFM)
   String sIPaddr;
   IPAddress MQTTeIP;
   
-  WFM.setPreSaveConfigCallback(saveConfigCallback);
+  WFM.setSaveConfigCallback(saveConfigCallback);
+  replaceDef = false;
   WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
 	//wifiManager.setAPCallback(configModeCallback);
 	WFM.setHostname("BotArena");
   WFM.addParameter(&TB_brokerIP);
 	isConnected = WFM.autoConnect("BotConfigAP");
   if (isConnected){
+    DBG("Connected");
     sIPaddr = TB_brokerIP.getValue();
     loadedFile = GetConfData();
     if ((loadedFile == 0) && (!sBrokerIP.isEmpty()))
     {
+      DBG("loaded IP from File");
       validIP = MQTTeIP.fromString(sIPaddr);
       if (validIP)
       {
@@ -199,13 +202,18 @@ void WiFiCP(WiFiManager &WFM)
           MQTTeIP.fromString(sIPaddr);
           replaceDef = true;
           if (SaveConf_flag == true)
-            SaveConf_flag = SaveConfData();
+          {
+            DBG("call Save");
+            sBrokerIP = sIPaddr;
+            savedFile = SaveConfData();
+          }
         }
       }
     }
     else
     {
       if(!sBrokerIP.isEmpty())
+      DBG("Used IP from TB");
       {
         validIP = MQTTeIP.fromString(sIPaddr);
         if (validIP)
@@ -213,11 +221,15 @@ void WiFiCP(WiFiManager &WFM)
           MQTTeIP.fromString(sIPaddr);
           replaceDef = true;
           if (SaveConf_flag == true)
+          {
+            DBG("call Save");
+            sBrokerIP = sIPaddr;
             SaveConf_flag = SaveConfData();
+          }
         }
       }
     }
-    if (replaceDef)
+    if (replaceDef == true)
     {
       MQTTIp = MQTTeIP;
       DBG("replaced default");

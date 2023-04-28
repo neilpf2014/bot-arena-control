@@ -76,7 +76,6 @@ byte debugMode = DEBUG_ON;
 //** Update these with values suitable for the broker used. *********************************
 //** should now cave param's entered in the CP screen
 
-const char *svrName = "Wyse-5070-ubuntu02"; // if you have zeroconfig working
 IPAddress MQTTIp(192, 168, 1, 140);         // IP oF the MQTT broker if not 192.168.1.183
 
 WiFiClient espClient;
@@ -181,10 +180,9 @@ void WiFiCP(WiFiManager &WFM)
   IPAddress MQTTeIP;
 
   WFM.setSaveConfigCallback(saveConfigCallback);
-  replaceHCIP = false;
-
-  WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.138", 30);
   WFM.setAPCallback(configModeCallback);
+  replaceHCIP = false;
+  WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
   WFM.setHostname("BotArena");
   WFM.addParameter(&TB_brokerIP);
   isConnected = WFM.autoConnect("BotConfigAP");
@@ -212,7 +210,6 @@ void WiFiCP(WiFiManager &WFM)
           replaceHCIP = true;
           if (SaveConf_flag == true)
           {
-            DBG("call Save");
             sBrokerIP = sIPaddr;
             SaveConf_flag = SaveConfData();
           }
@@ -228,11 +225,10 @@ void WiFiCP(WiFiManager &WFM)
 }
 
 // called to set up wifi
-// Still a WIP !!! Saving of Params is untested !!
+// Saving of Params is working now !!
 void WiFiConf(uint8_t ResetAP)
 {
   WiFiManager wifiManager;
-  // wifiManager.setAPCallback(configModeCallback);
   if (ResetAP)
   {
     wifiManager.resetSettings();
@@ -250,8 +246,11 @@ void WiFiConf(uint8_t ResetAP)
   MTQ.subscribeOutgoing(outTopic);
 }
 
+
 // use to get ip from mDNS, return true if sucess
-uint8_t mDNShelper(void)
+// not user anymore
+/*
+uint8_t mDNShelper(String svrName)
 {
   uint8_t logflag = true;
   unsigned int mdns_qu_cnt = 0;
@@ -275,6 +274,8 @@ uint8_t mDNShelper(void)
     logflag = false;
   return logflag;
 }
+*/
+
 // **********************************************************************************************
 // ****************** End Wifi Config code ******************************************************
 
@@ -295,6 +296,7 @@ uint8_t mDNShelper(void)
     10 sec count down (blinking green)
   Horn will sound at match end, time up or team tapout
 */
+// ***********************************************************************************************
 // ***********************************************************************************************
 //  set for pull up inputs
 PushButton Start_A(TEAM_A_START, 1);
@@ -625,7 +627,6 @@ String MstateSetMQTT(MatchState match, u_int8_t Match_Reset, u_int8_t printState
   break;
   case MatchState::sysint:
   {
-    // Serial.println("System_startup");
     S_temp = "system_startup";
   }
   break;
@@ -697,7 +698,6 @@ String MstateSetMQTT(MatchState match, u_int8_t Match_Reset, u_int8_t printState
 }
 
 // used to sound horn (yet another timer)
-// not tested
 void soundHorn(u_int8_t &hornOn, uint64_t &hornTime, u_int32_t tootLen, u_int8_t GPIO)
 {
   // horn is on when true, horn time stores start of sound
@@ -952,12 +952,12 @@ void loop()
     GotMail = MTQ.update();
     if (GotMail == true)
     {
-      //*** debug code *****************************
+      //*********Incoming Msg *****************************
       Serial.print("message is: ");
       Msgcontents = MTQ.GetMsg();
       Serial.println(Msgcontents);
       MQTThandleIncoming(Msgcontents, ResetSec, g_Match_Reset, g_match);
-      //********************************************
+      //********************************************************
       GotMail = false;
     }
     PubSub_timer = millis();

@@ -169,6 +169,9 @@ void saveConfigCallback()
   SaveConf_flag = true;
 }
 
+// Split wifi config into 2 procs to avoid code duplication
+// this does most of the heavy lifting
+// Saving of Params is working now !!
 void WiFiCP(WiFiManager &WFM)
 {
   bool validIP;
@@ -224,8 +227,7 @@ void WiFiCP(WiFiManager &WFM)
   }
 }
 
-// called to set up wifi
-// Saving of Params is working now !!
+// called to set up wifi -- Part 1 of 2
 void WiFiConf(uint8_t ResetAP)
 {
   WiFiManager wifiManager;

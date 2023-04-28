@@ -68,6 +68,7 @@ byte debugMode = DEBUG_ON;
 #define ADD_TIME_DIVISOR 200
 
 #define AP_DELAY 2000
+#define HARD_CODE_BROKER "192.168.1.140"
 #define CONFIG_FILE "/svr-config.json"
 
 //********** Wifi and MQTT stuff below ******************************************************
@@ -92,6 +93,7 @@ int value = 0;
 uint8_t GotMail;
 uint8_t statusCode;
 bool SaveConf_flag = false;
+bool Use_def_IP_flag = false;
 
 uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
@@ -157,69 +159,58 @@ uint8_t SaveConfData(void)
 
 // Wifi captive portal setup on ESP8266
 void configModeCallback(WiFiManager *myWiFiManager) {
-   Serial.println("Entered config mode");
+  Serial.println("Entered config mode");
 	Serial.println(WiFi.softAPIP());
-	digitalWrite(G_LIGHT, HIGH); // LED_BUILTIN is the horn !!
 	//if you used auto generated SSID, print it
 	Serial.println(myWiFiManager->getConfigPortalSSID());
+  digitalWrite(G_LIGHT, HIGH); // LED_BUILTIN is the horn !!
+  Use_def_IP_flag = true;
 }
 void saveConfigCallback()
 {
   // Set save config flag
   SaveConf_flag = true;
-  // do nothing right now
 }
+
 void WiFiCP(WiFiManager &WFM)
 {
-  uint8_t validIP;
+  bool validIP;
   uint8_t loadedFile;
   uint8_t savedFile;
   uint8_t isConnected;
-  bool replaceDef = false;
+  bool replaceHCIP;
   String sIPaddr;
   IPAddress MQTTeIP;
   
   WFM.setSaveConfigCallback(saveConfigCallback);
-  replaceDef = false;
+  replaceHCIP = false;
+  
   WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
-	//wifiManager.setAPCallback(configModeCallback);
+	WFM.setAPCallback(configModeCallback);
 	WFM.setHostname("BotArena");
   WFM.addParameter(&TB_brokerIP);
 	isConnected = WFM.autoConnect("BotConfigAP");
   if (isConnected){
     DBG("Connected");
-    sIPaddr = TB_brokerIP.getValue();
     loadedFile = GetConfData();
-    if ((loadedFile == 0) && (!sBrokerIP.isEmpty()))
+    // load from file ignore TB
+    if (!Use_def_IP_flag)
     {
       DBG("loaded IP from File");
-      validIP = MQTTeIP.fromString(sIPaddr);
-      if (validIP)
-      {
-        if (!sBrokerIP.equals(sIPaddr))
-        {
-          // set IP from text box input
-          MQTTeIP.fromString(sIPaddr);
-          replaceDef = true;
-          if (SaveConf_flag == true)
-          {
-            DBG("call Save");
-            sBrokerIP = sIPaddr;
-            savedFile = SaveConfData();
-          }
-        }
-      }
+      validIP = MQTTeIP.fromString(sBrokerIP);
+      if (!validIP)
+        replaceHCIP = true;
     }
     else
     {
-      if(!sBrokerIP.isEmpty())
+      sIPaddr = TB_brokerIP.getValue();
       DBG("Used IP from TB");
+      if(!sIPaddr.isEmpty())
       {
         validIP = MQTTeIP.fromString(sIPaddr);
         if (validIP)
         {
-          MQTTeIP.fromString(sIPaddr);
-          replaceDef = true;
+          replaceHCIP= true;
           if (SaveConf_flag == true)
           {
             DBG("call Save");
@@ -229,7 +220,7 @@ void WiFiCP(WiFiManager &WFM)
         }
       }
     }
-    if (replaceDef == true)
+    if (replaceHCIP == true)
     {
       MQTTIp = MQTTeIP;
       DBG("replaced default");

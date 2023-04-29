@@ -301,14 +301,14 @@ uint8_t mDNShelper(String svrName)
 // ***********************************************************************************************
 // ***********************************************************************************************
 //  set for pull up inputs
-PushButton Start_A(TEAM_A_START, 1);
-PushButton End_A(TEAM_A_END, 1);
-PushButton Start_B(TEAM_B_START, 1);
-PushButton End_B(TEAM_B_END, 1);
-PushButton GameStart(MATCH_START, 1);
-PushButton GameOver(MATCH_END, 1);
-PushButton GamePause(MATCH_PAUSE, 1);
-PushButton GameReset(MATCH_RESET, 1);
+PushButton Start_A(TEAM_A_START);
+PushButton End_A(TEAM_A_END);
+PushButton Start_B(TEAM_B_START);
+PushButton End_B(TEAM_B_END);
+PushButton GameStart(MATCH_START);
+PushButton GameOver(MATCH_END);
+PushButton GamePause(MATCH_PAUSE);
+PushButton GameReset(MATCH_RESET);
 
 // timer var for stuff
 uint64_t Btn_timer;
@@ -379,7 +379,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
     // Start is used for pause -- change for new electronics
     GameStart.update();
     // GamePause.update();
-    // BtnCycle =GameReset.cycleCount();
+    BtnCycle =GameReset.cycleCount();
     Match_Reset = false;
     /*
           if (GamePause.isCycled())
@@ -434,14 +434,12 @@ void readBtns(MatchState &match, bool &Match_Reset)
           BtnCycle = Start_B.cycleCount();
           BtnCycle = GameStart.cycleCount();
         }
-
-        /*
         if (GameReset.isCycled())
         {
           Match_Reset = true;
           BtnCycle =GameReset.cycleCount();
         }
-        */
+      
 
         // check to see if both teams are ready
         if ((Start_A.isCycled()) && (Start_B.isCycled()))
@@ -465,7 +463,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
         if ((GameStart.isCycled()) && (match == MatchState::all_ready))
         {
           BtnCycle = GameStart.cycleCount();
-          // BtnCycle = GameReset.cycleCount();
+          BtnCycle = GameReset.cycleCount();
           match = MatchState::starting;
         }
       }
@@ -515,8 +513,11 @@ void MQTThandleIncoming(String Msg, uint64_t &addTime, bool &Match_Reset, MatchS
   {
     if ((_match != MatchState::starting) && (_match != MatchState::paused) && (_match != MatchState::unpaused))
     {
+      DBG("Hit Reset 1");
+      
       if (CMD == 'R')
         Match_Reset = true;
+        DBG("Hit Reset 2");
     }
   }
 }

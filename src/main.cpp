@@ -41,7 +41,7 @@ byte debugMode = DEBUG_ON;
 #define TEAM_A_END 22   // old GPIO 22 New GPIO 26
 #define TEAM_B_START 33 // old GPIO 33 New GPIO 19
 #define TEAM_B_END 32   // old GPIO 32 New GPIO 23
-#define MATCH_START 23  // old GPIO 25 New GPIO 21
+#define MATCH_START 25  // old GPIO 25 New GPIO 21
 #define MATCH_PAUSE 26  // old GPIO 26 New GPIO not used
 #define MATCH_END 27    // old GPIO 27 New GPIO 22
 #define MATCH_RESET 14  // old GPIO 14 New GPIO not used
@@ -417,7 +417,6 @@ void readBtns(MatchState &match, bool &Match_Reset)
   else
   // match is not running these are active
   {
-
     // starting is the match start countdown state
     if ((match != MatchState::starting) && (match != MatchState::paused) && (match != MatchState::unpaused))
     {
@@ -434,36 +433,46 @@ void readBtns(MatchState &match, bool &Match_Reset)
           BtnCycle = Start_B.cycleCount();
           BtnCycle = GameStart.cycleCount();
         }
+        /*
         if (GameReset.isCycled())
         {
           Match_Reset = true;
           BtnCycle =GameReset.cycleCount();
         }
+        */
       
-
         // check to see if both teams are ready
-        if ((Start_A.isCycled()) && (Start_B.isCycled()))
+        if ((Start_A.isCycled()) && (match == MatchState::team_b_ready))
         {
           match = MatchState::all_ready;
           BtnCycle = Start_A.cycleCount();
           BtnCycle = Start_B.cycleCount();
         }
-        else
+        if ((Start_B.isCycled()) && (match == MatchState::team_a_ready))
         {
-          if ((Start_A.isCycled()) && (match != MatchState::all_ready))
-          {
-            match = MatchState::team_a_ready;
-          }
-          if ((Start_B.isCycled()) && (match != MatchState::all_ready))
-          {
-            match = MatchState::team_b_ready;
-          }
+          match = MatchState::all_ready;
+          BtnCycle = Start_A.cycleCount();
+          BtnCycle = Start_B.cycleCount();
         }
+        if ((Start_A.isCycled()) && (match != MatchState::all_ready))
+        {
+          match = MatchState::team_a_ready;
+          BtnCycle = Start_A.cycleCount();
+        }
+        if ((Start_B.isCycled()) && (match != MatchState::all_ready))
+        {
+          match = MatchState::team_b_ready;
+          BtnCycle = Start_B.cycleCount();
+          }
+        
         // if everyone is ready and start is pressed
         if ((GameStart.isCycled()) && (match == MatchState::all_ready))
         {
           BtnCycle = GameStart.cycleCount();
-          BtnCycle = GameReset.cycleCount();
+          BtnCycle = Start_A.cycleCount();
+          BtnCycle = Start_B.cycleCount();
+
+          //BtnCycle = GameReset.cycleCount();
           match = MatchState::starting;
         }
       }
@@ -491,13 +500,12 @@ void readBtns(MatchState &match, bool &Match_Reset)
 }
 
 // new to handle msg from MQTT
-void MQTThandleIncoming(String Msg, uint64_t &addTime, bool &Match_Reset, MatchState &_match)
+void MQTThandleIncoming(String Msg, uint64_t &addTime, MatchState &_match, bool &_reset)
 {
-
   char CMD;
   String sResetSecs;
 
-  CMD = Msgcontents.charAt(1);
+  CMD = Msgcontents.charAt(0);
   if (Msgcontents.length() > 1)
   {
     // parse the input will be 1 letter and an integer
@@ -513,11 +521,10 @@ void MQTThandleIncoming(String Msg, uint64_t &addTime, bool &Match_Reset, MatchS
   {
     if ((_match != MatchState::starting) && (_match != MatchState::paused) && (_match != MatchState::unpaused))
     {
-      DBG("Hit Reset 1");
-      
       if (CMD == 'R')
-        Match_Reset = true;
-        DBG("Hit Reset 2");
+      {
+        _reset = true;
+      }
     }
   }
 }
@@ -618,7 +625,7 @@ void setLights(MatchState &match, bool Match_Reset)
 }
 
 // was debug now setting Match string for MQTT
-String MstateSetMQTT(MatchState match, u_int8_t Match_Reset, u_int8_t printState)
+String MstateSetMQTT(MatchState match, bool Match_Reset, u_int8_t printState)
 {
   String S_temp;
   switch (match)
@@ -692,7 +699,7 @@ String MstateSetMQTT(MatchState match, u_int8_t Match_Reset, u_int8_t printState
   }
   if ((match == MatchState::ko_end) || (match == MatchState::team_a_tap) || (match == MatchState::team_b_tap) || (match == MatchState::time_up) || (match == MatchState::sysint))
   {
-    if (Match_Reset > 0)
+    if (Match_Reset == true)
       S_temp = "reset_ready";
   }
   if (printState > 0)
@@ -732,6 +739,13 @@ void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValu
     timerValue = 0;
     running = true;
   }
+  // make time show 0 at reset
+  if (reset == true)
+  {
+    if((running == false)&&((l_match != MatchState::paused)||(l_match != MatchState::unpaused)))
+      timerValue = 0;
+  }
+  
   // restart after pause
   if ((l_match == MatchState::unpaused) && (running == false))
   {
@@ -855,6 +869,8 @@ void setup()
   S_Match = "init";
 }
 
+
+
 // Main Loop
 void loop()
 {
@@ -959,7 +975,7 @@ void loop()
       Serial.print("message is: ");
       Msgcontents = MTQ.GetMsg();
       Serial.println(Msgcontents);
-      MQTThandleIncoming(Msgcontents, ResetSec, g_Match_Reset, g_match);
+      MQTThandleIncoming(Msgcontents, ResetSec, g_match, g_Match_Reset);
       //********************************************************
       GotMail = false;
     }

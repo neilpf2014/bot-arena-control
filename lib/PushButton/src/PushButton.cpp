@@ -1,6 +1,6 @@
-// 
-// 
-// 
+// NPF 2022-11-18
+// Pushbutton Library
+// Button handling class with debounce
 
 #include "PushButton.h"
 // digital pin, assume pull low
@@ -104,12 +104,12 @@ uint8_t PushButton::down()
 {
 	return bPressed;
 }
-// set long press delay mills
+// set long press delay millis
 void PushButton::setLongPressMS(unsigned int delay)
 {
 	longPressdelay = delay;
 }
-// retrun the long press value if it excedes the delay
+// return the long press value if it excedes the delay
 uint64_t PushButton::getLongPressMS()
 {
 	uint64_t tempValue;

@@ -117,6 +117,8 @@ uint8_t GetConfData(void)
           sBrokerIP = jsn["BrokerIP"].as<String>();
           retVal = 0;
         }
+        else
+          DBG("JSON error");
       }
     }
     else
@@ -126,7 +128,7 @@ uint8_t GetConfData(void)
 }
 
 // used to save config as JSON
-uint8_t SaveConfData(void)
+uint8_t SaveConfData(String sIP)
 {
   uint8_t retVal = 1;
   // SPIFFS.format();
@@ -134,11 +136,15 @@ uint8_t SaveConfData(void)
   {
 
     StaticJsonDocument<512> jsn;
+    jsn["BrokerIP"] = sIP;
     File CfgFile = SPIFFS.open(CONFIG_FILE, "w");
     if (CfgFile)
     {
       if (serializeJson(jsn, CfgFile) != 0)
+      {
         retVal = 0;
+        DBG("wrote something");
+      }
       else
         DBG("failed to write file");
     }
@@ -214,7 +220,7 @@ void WiFiCP(WiFiManager &WFM)
           if (SaveConf_flag == true)
           {
             sBrokerIP = sIPaddr;
-            SaveConf_flag = SaveConfData();
+            SaveConf_flag = SaveConfData(sIPaddr);
           }
         }
       }

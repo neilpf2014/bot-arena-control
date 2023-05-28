@@ -821,6 +821,20 @@ void IOTsetup()
   // **********************************************************
 }
 
+// Added to output to MQTT as JSON
+String MakeJson(uint32_t iMatchSCode, String SMatch, uint64_t SecRemain, uint32_t Mlen)
+{
+  StaticJsonDocument<256> JM;
+  String sJSoutput;
+  JM["Mills"] = millis();
+  JM["Match_State_Code"] = iMatchSCode;
+  JM["Match_State"] = SMatch;
+  JM["Match_Sec_remain"] = SecRemain;
+  JM["Match_Length"] = Mlen;
+  serializeJson(JM, sJSoutput);
+  return sJSoutput;
+}
+
 void setup()
 {
 
@@ -868,7 +882,6 @@ void setup()
   debug_lastmatch = MatchState::sysint;
   S_Match = "init";
 }
-
 
 
 // Main Loop
@@ -965,8 +978,10 @@ void loop()
   {
       // send / recieve status via MQTT
     S_Match = MstateSetMQTT(g_match, g_Match_Reset, 0);
-    // this should be sending cur mills,state_code,state string, match sec remain as the message
-    S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
+    // Uncomment to send string the old way
+    //S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
+    // Send as JSON now
+    S_Stat_msg = MakeJson(int(g_match),S_Match,MatchSecRemain,MATCH_LEN);
     MQstatcode = MTQ.publish(S_Stat_msg);
     GotMail = MTQ.update();
     if (GotMail == true)

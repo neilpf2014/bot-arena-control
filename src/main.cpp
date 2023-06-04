@@ -2,7 +2,7 @@
 **  Dev to use Mqtt to send the match status to the stream or other consuming application
 **  changes for new areana 4-25-2023 electronics ****
 */
-
+#include <stdlib.h>
 #include <Arduino.h>
 #include <PushButton.h>
 #include <MQTThandler.h>
@@ -29,7 +29,7 @@
 // All #define's  at top of code to avoid issues
 // inline echo for debug
 #define DEBUG_ON 1
-#define DEBUG_OFF 0
+
 byte debugMode = DEBUG_ON;
 
 #define DBG(...) debugMode == DEBUG_ON ? Serial.println(__VA_ARGS__) : NULL
@@ -45,6 +45,7 @@ byte debugMode = DEBUG_ON;
 #define MATCH_PAUSE 14  // old GPIO 26 New GPIO not used 14
 #define MATCH_END 21    // old GPIO 27 New GPIO 22 21
 #define MATCH_RESET 27  // old GPIO 14 New GPIO not used 27
+
 // tower signal light GPIO's
 #define R_LIGHT 13  // old GPIO 5 New GPIO 13
 #define R_LIGHT_2 2 // old GPIO 4 New GPIO 2
@@ -62,7 +63,6 @@ byte debugMode = DEBUG_ON;
 #define MAIN_LOOP_DELAY 5         // in ms
 #define HORN_SHORT 1000           // ms
 #define HORN_LONG 2000            // ms
-#define DIS_DELAY 200             // ms display update rate
 #define PUBSUB_DELAY 200          // ms pubsub update rate
 #define ADD_TIME_BTN_DELAY 2000   // ms delay to count add time btn as "down"
 #define ADD_TIME_DIVISOR 200
@@ -254,34 +254,6 @@ void WiFiConf(uint8_t ResetAP)
   MTQ.subscribeOutgoing(outTopic);
 }
 
-// use to get ip from mDNS, return true if sucess
-// not user anymore
-/*
-uint8_t mDNShelper(String svrName)
-{
-  uint8_t logflag = true;
-  unsigned int mdns_qu_cnt = 0;
-
-  if (!MDNS.begin("esp32whatever"))
-  {
-    Serial.println("Error setting up MDNS responder!");
-    logflag = false;
-  }
-  else
-    Serial.println("Finished intitializing the MDNS client...");
-  MQTTIp = MDNS.queryHost(svrName);
-  while ((MQTTIp.toString() == "0.0.0.0") && (mdns_qu_cnt < 10))
-  {
-    Serial.println("Trying again to resolve mDNS");
-    delay(250);
-    MQTTIp = MDNS.queryHost(svrName);
-    mdns_qu_cnt++;
-  }
-  if (MQTTIp.toString() == "0.0.0.0")
-    logflag = false;
-  return logflag;
-}
-*/
 
 // **********************************************************************************************
 // ****************** End Wifi Config code ******************************************************
@@ -322,8 +294,6 @@ uint64_t Horn_timer;
 uint64_t Timer_timer;
 uint64_t Display_timer;
 uint64_t PubSub_timer; // use for pubsub
-uint64_t Dis_min;
-uint64_t Dis_sec;
 
 // Match state
 enum MatchState
@@ -343,7 +313,6 @@ enum MatchState
   sysint
 };
 enum MatchState g_match;
-enum MatchState last_match_state;
 enum MatchState debug_lastmatch;
 bool g_Match_Reset;
 
@@ -352,7 +321,7 @@ uint64_t gMatchStartTime; // match start time ms
 uint64_t gTempRunTime;    // time ms
 uint64_t MatchSecRemain;  // sec remaining
 int64_t CountDownMSec;    // count down
-int secToAdd;             //
+
 bool isTimerRunning;
 uint64_t gSDtimer;      // used for start delay
 uint64_t gBLtimer;      // for light blinking
@@ -381,25 +350,17 @@ void readBtns(MatchState &match, bool &Match_Reset)
     End_A.update();
     End_B.update();
     GameOver.update();
-    // Start is used for pause -- change for new electronics
     GameStart.update();
-    // GamePause.update();
+
     BtnCycle = GameReset.cycleCount();
     Match_Reset = false;
-    /*
-          if (GamePause.isCycled())
-          {
-            BtnCycle = GamePause.cycleCount();
-            match = MatchState::paused;
-          }
-    */
+
     // team tap out
     if ((End_A.isCycled() || End_B.isCycled()) && (match == MatchState::in_progress))
     {
       // Team A has tapped out
       if (End_A.isCycled())
         match = MatchState::team_a_tap;
-      // Team B has tapped out
       if (End_B.isCycled())
         match = MatchState::team_b_tap;
       BtnCycle = End_A.cycleCount();
@@ -429,7 +390,6 @@ void readBtns(MatchState &match, bool &Match_Reset)
         GameStart.update();
         Start_A.update();
         Start_B.update();
-        // GameReset.update();
 
         // this discards the reads on A, B and main start if not reset
         if (Match_Reset == false)
@@ -438,13 +398,6 @@ void readBtns(MatchState &match, bool &Match_Reset)
           BtnCycle = Start_B.cycleCount();
           BtnCycle = GameStart.cycleCount();
         }
-        /*
-        if (GameReset.isCycled())
-        {
-          Match_Reset = true;
-          BtnCycle =GameReset.cycleCount();
-        }
-        */
 
         // check to see if both teams are ready
         if ((Start_A.isCycled()) && (match == MatchState::team_b_ready))
@@ -488,16 +441,12 @@ void readBtns(MatchState &match, bool &Match_Reset)
       if (match == MatchState::paused)
       {
         GameStart.update();
-        // GamePause.update();
-        // GameReset.update();
         GameOver.update();
         if (GameStart.isCycled())
         {
           match = MatchState::unpaused;
           BtnCycle = GameStart.cycleCount();
           BtnCycle = GameOver.cycleCount();
-          // BtnCycle = GamePause.cycleCount();
-          // BtnCycle = GameReset.cycleCount();
         }
       }
     }

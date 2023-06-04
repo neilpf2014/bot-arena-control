@@ -17,7 +17,7 @@
 
 /*
 ** Robot Combat Arena Control Code
-** Using Ardunio framework / ESP32
+** Using Arduino framework / ESP32
 ** Read 8 buttons (6 now)
 ** ready and tap out for 2 teams
 ** Match start / pause / end /reset for ref
@@ -55,16 +55,16 @@ byte debugMode = DEBUG_ON;
 #define D_SER_TX 17
 #define D_SER_RX 16
 
-#define MATCH_LEN (2 * 60) + 30 // match len in sec ( 2.5 min)
-#define MATCH_END_WARN 15       // ending warn time sec
-#define BLINK_DELAY 500         // in ms
-#define STARTUP_DELAY 3 * 1000  // 3 2 1 go!
-#define MAIN_LOOP_DELAY 5       // in ms
-#define HORN_SHORT 1000         // ms
-#define HORN_LONG 2000          // ms
-#define DIS_DELAY 200           // ms display update rate
-#define PUBSUB_DELAY 200        // ms pubsub update rate
-#define ADD_TIME_BTN_DELAY 2000 // ms delay to count add time btn as "down"
+#define MATCH_LEN ((2 * 60) + 30) // match len in sec ( 2.5 min)
+#define MATCH_END_WARN 10         // ending warn time sec
+#define BLINK_DELAY 500           // in ms
+#define STARTUP_DELAY (3 * 1000)  // 3 2 1 go!
+#define MAIN_LOOP_DELAY 5         // in ms
+#define HORN_SHORT 1000           // ms
+#define HORN_LONG 2000            // ms
+#define DIS_DELAY 200             // ms display update rate
+#define PUBSUB_DELAY 200          // ms pubsub update rate
+#define ADD_TIME_BTN_DELAY 2000   // ms delay to count add time btn as "down"
 #define ADD_TIME_DIVISOR 200
 
 #define AP_DELAY 2000
@@ -508,7 +508,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
 void MQTThandleIncoming(String Msg, uint64_t &addTime, MatchState &_match, bool &_reset)
 {
   char CMD;
-  String sResetSecs;
+  String s_latter_message_contents;
 
   CMD = Msgcontents.charAt(0);
   if (Msgcontents.length() > 1)
@@ -518,8 +518,20 @@ void MQTThandleIncoming(String Msg, uint64_t &addTime, MatchState &_match, bool 
     // 'A' for add time
     if (CMD == 'A')
     {
-      sResetSecs = Msgcontents.substring(2, Msgcontents.length());
+      s_latter_message_contents = Msgcontents.substring(2, Msgcontents.length());
       ResetSec = Msgcontents.toInt();
+    }
+
+    if (CMD == 'E')
+    { // rEady command
+      if (s_latter_message_contents == "R")
+      {
+        Serial.println("Got reset for Red via web dash.");
+      }
+      else if (s_latter_message_contents == "B")
+      {
+        Serial.println("Got reset for blue via web dash.");
+      }
     }
   }
   else

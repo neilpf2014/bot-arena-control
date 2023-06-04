@@ -46,19 +46,19 @@ byte debugMode = DEBUG_ON;
 #define MATCH_END 21    // old GPIO 27 New GPIO 22 21
 #define MATCH_RESET 27  // old GPIO 14 New GPIO not used 27
 // tower signal light GPIO's
-#define R_LIGHT 13     // old GPIO 5 New GPIO 13
-#define R_LIGHT_2 2   // old GPIO 4 New GPIO 2
-#define Y_LIGHT 18    // old GPIO 12 New GPIO 18
-#define G_LIGHT 4    // old GPIO 13 New GPIO 4
-#define HORN 33        // old GPIO 2 New GPIO 33
+#define R_LIGHT 13  // old GPIO 5 New GPIO 13
+#define R_LIGHT_2 2 // old GPIO 4 New GPIO 2
+#define Y_LIGHT 18  // old GPIO 12 New GPIO 18
+#define G_LIGHT 4   // old GPIO 13 New GPIO 4
+#define HORN 33     // old GPIO 2 New GPIO 33
 
 #define D_SER_TX 17
 #define D_SER_RX 16
 
-#define MATCH_LEN 150           // match len in sec ( 2.5 min)
+#define MATCH_LEN (2 * 60) + 30 // match len in sec ( 2.5 min)
 #define MATCH_END_WARN 15       // ending warn time sec
 #define BLINK_DELAY 500         // in ms
-#define STARTUP_DELAY 5000      // 5 sec
+#define STARTUP_DELAY 3 * 1000  // 3 2 1 go!
 #define MAIN_LOOP_DELAY 5       // in ms
 #define HORN_SHORT 1000         // ms
 #define HORN_LONG 2000          // ms
@@ -76,7 +76,7 @@ byte debugMode = DEBUG_ON;
 //** Update these with values suitable for the broker used. *********************************
 //** should now cave param's entered in the CP screen
 
-IPAddress MQTTIp(192, 168, 1, 140);         // IP oF the MQTT broker if not 192.168.1.183
+IPAddress MQTTIp(192, 168, 1, 140); // IP oF the MQTT broker if not 192.168.1.183
 
 WiFiClient espClient;
 uint64_t lastMsg = 0;
@@ -254,7 +254,6 @@ void WiFiConf(uint8_t ResetAP)
   MTQ.subscribeOutgoing(outTopic);
 }
 
-
 // use to get ip from mDNS, return true if sucess
 // not user anymore
 /*
@@ -307,14 +306,14 @@ uint8_t mDNShelper(String svrName)
 // ***********************************************************************************************
 // ***********************************************************************************************
 //  set for pull up inputs
-PushButton Start_A(TEAM_A_START,1);
-PushButton End_A(TEAM_A_END,1);
-PushButton Start_B(TEAM_B_START,1);
-PushButton End_B(TEAM_B_END,1);
-PushButton GameStart(MATCH_START,1);
-PushButton GameOver(MATCH_END,1);
-PushButton GamePause(MATCH_PAUSE,1);
-PushButton GameReset(MATCH_RESET,1);
+PushButton Start_A(TEAM_A_START, 1);
+PushButton End_A(TEAM_A_END, 1);
+PushButton Start_B(TEAM_B_START, 1);
+PushButton End_B(TEAM_B_END, 1);
+PushButton GameStart(MATCH_START, 1);
+PushButton GameOver(MATCH_END, 1);
+PushButton GamePause(MATCH_PAUSE, 1);
+PushButton GameReset(MATCH_RESET, 1);
 
 // timer var for stuff
 uint64_t Btn_timer;
@@ -385,7 +384,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
     // Start is used for pause -- change for new electronics
     GameStart.update();
     // GamePause.update();
-    BtnCycle =GameReset.cycleCount();
+    BtnCycle = GameReset.cycleCount();
     Match_Reset = false;
     /*
           if (GamePause.isCycled())
@@ -446,7 +445,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
           BtnCycle =GameReset.cycleCount();
         }
         */
-      
+
         // check to see if both teams are ready
         if ((Start_A.isCycled()) && (match == MatchState::team_b_ready))
         {
@@ -469,8 +468,8 @@ void readBtns(MatchState &match, bool &Match_Reset)
         {
           match = MatchState::team_b_ready;
           BtnCycle = Start_B.cycleCount();
-          }
-        
+        }
+
         // if everyone is ready and start is pressed
         if ((GameStart.isCycled()) && (match == MatchState::all_ready))
         {
@@ -478,7 +477,7 @@ void readBtns(MatchState &match, bool &Match_Reset)
           BtnCycle = Start_A.cycleCount();
           BtnCycle = Start_B.cycleCount();
 
-          //BtnCycle = GameReset.cycleCount();
+          // BtnCycle = GameReset.cycleCount();
           match = MatchState::starting;
         }
       }
@@ -748,10 +747,10 @@ void match_timer(MatchState &l_match, u_int64_t &StartTime, u_int64_t &timerValu
   // make time show 0 at reset
   if (reset == true)
   {
-    if((running == false)&&((l_match != MatchState::paused)||(l_match != MatchState::unpaused)))
+    if ((running == false) && ((l_match != MatchState::paused) || (l_match != MatchState::unpaused)))
       timerValue = 0;
   }
-  
+
   // restart after pause
   if ((l_match == MatchState::unpaused) && (running == false))
   {
@@ -803,9 +802,9 @@ void IOTsetup()
   // Will wait 2 sec and check for reset to be held down / pressed
   while ((APmodeCKtimer + AP_DELAY) > millis())
   {
-    if (End_A.isCycled())
+    if (GameOver.isCycled())
       Btnstate = 1;
-    End_A.update();
+    GameOver.update();
   }
   tempint = End_A.cycleCount();
   String TempIP = MQTTIp.toString();
@@ -889,7 +888,6 @@ void setup()
   S_Match = "init";
 }
 
-
 // Main Loop
 void loop()
 {
@@ -906,11 +904,16 @@ void loop()
     else if (g_match == MatchState::starting)
     {
       CountDownMSec = STARTUP_DELAY - (millis() - gSDtimer);
-      if (CountDownMSec < 5)
+
+      // announce the countdown via MQTT.
+      /// todo
+      S_Stat_msg = MakeJson(int(g_match), S_Match, (CountDownMSec / 1000) + 1, MATCH_LEN);
+      MTQ.publish(S_Stat_msg);
+
+      if (CountDownMSec < 3)
       {
         // start match / reset count down timer
         g_match = MatchState::in_progress;
-        CountDownMSec = 0;
         gSDtimer = 0;
       }
     }
@@ -982,13 +985,17 @@ void loop()
   // Deal with MQTT Pubsub
   if ((millis() - PubSub_timer) > PUBSUB_DELAY)
   {
-      // send / recieve status via MQTT
+    // send / recieve status via MQTT
     S_Match = MstateSetMQTT(g_match, g_Match_Reset, 0);
     // Uncomment to send string the old way
-    //S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
+    // S_Stat_msg = String(millis()) + "," + String(g_match) + "," + S_Match + "," + String(MatchSecRemain) + "," + String(MATCH_LEN);
     // Send as JSON now
-    S_Stat_msg = MakeJson(int(g_match),S_Match,MatchSecRemain,MATCH_LEN);
-    MQstatcode = MTQ.publish(S_Stat_msg);
+    if (g_match != MatchState::starting)
+    {
+      S_Stat_msg = MakeJson(int(g_match), S_Match, MatchSecRemain, MATCH_LEN);
+      MQstatcode = MTQ.publish(S_Stat_msg);
+    }
+
     GotMail = MTQ.update();
     if (GotMail == true)
     {

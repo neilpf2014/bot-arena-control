@@ -27,13 +27,8 @@
 ** With MQTT code for stream overlay integration
 ** Will control 2 "stoplight" towers with signal horns
 ** NF 2022/06/04, updated for new electronics 2023/04/25
+** KF 2023/06/05, updated with minor refactor to make life easier.  
 */
-
-// All #define's  at top of code to avoid issues
-// inline echo for debug
-
-// ************* Button GPIO's ESP32 / Change for STM32 **********************************
-// changed for new control
 
 
 //********** Wifi and MQTT stuff below ******************************************************
@@ -242,15 +237,15 @@ void WiFiConf(uint8_t ResetAP)
 */
 // ***********************************************************************************************
 // ***********************************************************************************************
-//  set for pull up inputs
-PushButton Start_A(TEAM_A_START, 1);
-PushButton End_A(TEAM_A_END, 1);
-PushButton Start_B(TEAM_B_START, 1);
-PushButton End_B(TEAM_B_END, 1);
-PushButton GameStart(MATCH_START, 1);
-PushButton GameOver(MATCH_END, 1);
-PushButton GamePause(MATCH_PAUSE, 1);
-PushButton GameReset(MATCH_RESET, 1);
+//  set for pull up / down inputs
+PushButton Start_A(TEAM_A_START,HI_LO);
+PushButton End_A(TEAM_A_END,HI_LO);
+PushButton Start_B(TEAM_B_START,HI_LO);
+PushButton End_B(TEAM_B_END,HI_LO);
+PushButton GameStart(MATCH_START,HI_LO);
+PushButton GameOver(MATCH_END,HI_LO);
+PushButton GamePause(MATCH_PAUSE,HI_LO);
+PushButton GameReset(MATCH_RESET,HI_LO);
 
 // timer var for stuff
 uint64_t Btn_timer;
@@ -316,8 +311,8 @@ void readBtns(MatchState &match, bool &Match_Reset)
     End_B.update();
     GameOver.update();
     GameStart.update();
-
-    BtnCycle = GameReset.cycleCount();
+    // GamePause.update();
+    // BtnCycle =GameReset.cycleCount();
     Match_Reset = false;
 
     // team tap out
@@ -370,12 +365,14 @@ void readBtns(MatchState &match, bool &Match_Reset)
           match = MatchState::all_ready;
           BtnCycle = Start_A.cycleCount();
           BtnCycle = Start_B.cycleCount();
+          BtnCycle = GameStart.cycleCount();
         }
         if ((Start_B.isCycled()) && (match == MatchState::team_a_ready))
         {
           match = MatchState::all_ready;
           BtnCycle = Start_A.cycleCount();
           BtnCycle = Start_B.cycleCount();
+          BtnCycle = GameStart.cycleCount();
         }
         if ((Start_A.isCycled()) && (match != MatchState::all_ready))
         {
@@ -394,6 +391,10 @@ void readBtns(MatchState &match, bool &Match_Reset)
           BtnCycle = GameStart.cycleCount();
           BtnCycle = Start_A.cycleCount();
           BtnCycle = Start_B.cycleCount();
+          // throw out any presses to the end match buttons
+          BtnCycle = End_A.cycleCount();
+          BtnCycle = End_B.cycleCount();
+          BtnCycle = GameOver.cycleCount();
 
           // BtnCycle = GameReset.cycleCount();
           match = MatchState::starting;

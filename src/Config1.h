@@ -16,7 +16,7 @@
 /* PINOUTS FOR CONTROL BOARD 
 VALID AS OF 2023/06/05 -K
 */
-
+/*
 #ifdef GPIO_OLD // for V1 control board
   #define TEAM_A_START 23 // old GPIO 23 New GPIO 25  26
   #define TEAM_A_END 22   // old GPIO 22 New GPIO 26  25
@@ -50,7 +50,7 @@ VALID AS OF 2023/06/05 -K
   #define HORN 33        // old GPIO 2 New GPIO 33
   #define HI_LO 1
 #endif
-
+*/
 /* Arena Timing Configuration */
 
 #define MATCH_LEN ((2 * 60) + 30) // match len in sec ( 2.5 min)

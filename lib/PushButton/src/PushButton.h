@@ -34,10 +34,13 @@ protected:
 	const unsigned long debounce = 40; // 20 milsec debounce
 
 public:
+	// no pin assign
+	PushButton(void);
 	// Digital pin
 	PushButton(unsigned int pin);
 	// pin and pull high / low
 	PushButton(unsigned int pin, unsigned int hilo);
+	void setPin(unsigned int pin, unsigned int hilo);
 	//update button status
 	void update();
 	// was button cycled ? (T/F)

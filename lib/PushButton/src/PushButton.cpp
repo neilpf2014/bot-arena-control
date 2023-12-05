@@ -3,6 +3,21 @@
 // Button handling class with debounce
 
 #include "PushButton.h"
+// for testing don't use
+PushButton::PushButton(void)
+{
+	btnState = UP;
+	Cmils = millis();
+	Pmils = Cmils;
+	_hilo = 0;
+	bPressed = 0;
+	cycles = 0;
+	isCycle = 0;
+	longPressdelay = DEF_PRESSDELAY;
+	longPressValue = 0;
+	longPressInitMS = 0;
+}
+
 // digital pin, assume pull low
 PushButton::PushButton(unsigned int pin)
 {
@@ -38,6 +53,16 @@ PushButton::PushButton(unsigned int pin, unsigned int hilo)
 	longPressdelay = DEF_PRESSDELAY;
 	longPressValue = 0;
 	longPressInitMS = 0;
+}
+
+void PushButton::setPin(unsigned int pin, unsigned int hilo)
+{
+	btnPin = pin;
+	if (hilo < 1)
+		pinMode(pin, INPUT_PULLDOWN);
+	else
+		pinMode(pin, INPUT_PULLUP);
+	_hilo = hilo;
 }
 
 // call in loop to update state

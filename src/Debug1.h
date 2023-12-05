@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <Arduino.h>
-#include "Config.h"
+#include "Config1.h"
 
 byte debugMode = DEBUG_ON;
 

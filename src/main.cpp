@@ -14,10 +14,10 @@
 #include <WebServer.h>
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 #include <ESPmDNS.h>
+#include <ButtonPanel.h>
 
-#include "Config.h"
-#include "Debug.h"
-
+#include "Config1.h"
+#include "Debug1.h"
 /*
 ** Robot Combat Arena Control Code
 ** Using Arduino framework / ESP32
@@ -29,7 +29,22 @@
 ** NF 2022/06/04, updated for new electronics 2023/04/25
 ** KF 2023/06/05, updated with minor refactor to make life easier.  
 */
-
+// Moved this back to Main as the Config.h was causing a namespace error with the new button library
+  #define TEAM_A_START 26 // old GPIO 23 New GPIO 25  26
+  #define TEAM_A_END 25   // old GPIO 22 New GPIO 26  25
+  #define TEAM_B_START 19 // old GPIO 33 New GPIO 19
+  #define TEAM_B_END 23   // old GPIO 32 New GPIO 23
+  #define MATCH_START 22  // old GPIO 25 New GPIO 21 22
+  #define MATCH_PAUSE 14  // old GPIO 26 New GPIO not used 14
+  #define MATCH_END 21    // old GPIO 27 New GPIO 22 21
+  #define MATCH_RESET 27  // old GPIO 14 New GPIO not used 27
+  // tower signal light GPIO's
+  #define R_LIGHT 13     // old GPIO 5 New GPIO 13
+  #define R_LIGHT_2 2   // old GPIO 4 New GPIO 2
+  #define Y_LIGHT 18    // old GPIO 12 New GPIO 18
+  #define G_LIGHT 4    // old GPIO 13 New GPIO 4
+  #define HORN 33        // old GPIO 2 New GPIO 33
+  #define HI_LO 1
 
 //********** Wifi and MQTT stuff below ******************************************************
 //******* based on Moxie board project  *****************************************************

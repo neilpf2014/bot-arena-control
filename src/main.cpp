@@ -1,6 +1,7 @@
 /*
-**  Dev to use Mqtt to send the match status to the stream or other consuming application
+**  Use Mqtt to send the match status to the stream or other consuming application
 **  changes for new areana 4-25-2023 electronics ****
+**  This branch is for the legacy 
 */
 #include <stdlib.h>
 #include <Arduino.h>
@@ -55,8 +56,9 @@ bool Use_def_IP_flag = false;
 
 uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
-const char *outTopic = "botcontrol";
-const char *inTopic = "timecontrol";
+// change for legacy electronics on green arena
+const char *outTopic = "bots2";
+const char *inTopic = "timegreen";
 
 // used to get JSON config
 uint8_t GetConfData(void)
@@ -119,7 +121,7 @@ uint8_t SaveConfData(String sIP)
   return retVal;
 }
 
-// Wifi captive portal setup on ESP8266
+// Wifi captive portal setup on ESP32
 void configModeCallback(WiFiManager *myWiFiManager)
 {
   Serial.println("Entered config mode");
@@ -151,7 +153,7 @@ void WiFiCP(WiFiManager &WFM)
   WFM.setSaveConfigCallback(saveConfigCallback);
   WFM.setAPCallback(configModeCallback);
   replaceHCIP = false;
-  WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.140", 30);
+  WiFiManagerParameter TB_brokerIP("TBbroker", "MQTT broker IP", "192.168.1.150", 30);
   WFM.setHostname("BotArena");
   WFM.addParameter(&TB_brokerIP);
   isConnected = WFM.autoConnect("BotConfigAP");

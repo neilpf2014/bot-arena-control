@@ -15,7 +15,10 @@
 
 /* PINOUTS FOR CONTROL BOARD 
 VALID AS OF 2023/06/05 -K
+** Change for green areana with old style board
+** NF 20231205
 */
+#define GPIO_OLD
 
 #ifdef GPIO_OLD // for V1 control board
   #define TEAM_A_START 23 // old GPIO 23 New GPIO 25  26
@@ -64,5 +67,5 @@ VALID AS OF 2023/06/05 -K
 #define ADD_TIME_BTN_DELAY 2000   // ms delay to count add time btn as "down"
 
 #define AP_DELAY 2000
-#define HARD_CODE_BROKER "192.168.1.140"
+#define HARD_CODE_BROKER "192.168.1.150"
 #define CONFIG_FILE "/svr-config.json"

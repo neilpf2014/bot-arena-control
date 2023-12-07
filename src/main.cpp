@@ -35,7 +35,7 @@
 //********** Wifi and MQTT stuff below ******************************************************
 //******* based on Moxie board project  *****************************************************
 //** Update these with values suitable for the broker used. *********************************
-//** should now cave param's entered in the CP screen
+//** should now save param's entered in the CP screen
 
 IPAddress MQTTIp(192, 168, 1, 140); // IP oF the MQTT broker if not 192.168.1.183
 
@@ -58,7 +58,7 @@ uint8_t ConnectedToAP = false;
 MQTThandler MTQ(espClient, MQTTIp);
 // change for legacy electronics on green arena
 const char *outTopic = "bots2";
-const char *inTopic = "timegreen";
+const char *inTopic = "timecontrol_green";
 
 // used to get JSON config
 uint8_t GetConfData(void)
